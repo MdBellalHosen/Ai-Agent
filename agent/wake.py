@@ -46,6 +46,29 @@ def download(progress=print):
     progress("Wake word model ready.")
 
 
+_model = {}
+_model_lock = threading.Lock()
+
+
+def model():
+    """The small English model, loaded once and shared by the wake word and offline mic."""
+    import vosk
+    with _model_lock:
+        if "m" not in _model:
+            vosk.SetLogLevel(-1)
+            _model["m"] = vosk.Model(str(MODEL_DIR))
+        return _model["m"]
+
+
+def offline_transcribe(pcm):
+    """English speech to text without internet. pcm: 16 kHz mono int16."""
+    import vosk
+    recognizer = vosk.KaldiRecognizer(model(), RATE)
+    for i in range(0, len(pcm), 8000):
+        recognizer.AcceptWaveform(pcm[i:i + 8000])
+    return json.loads(recognizer.FinalResult()).get("text", "").strip()
+
+
 def is_wake(result):
     """result: Vosk's final JSON as a dict."""
     words = result.get("result") or [{"word": w, "conf": 1.0} for w in result.get("text", "").split()]
@@ -72,8 +95,7 @@ class Listener(threading.Thread):
         try:
             import sounddevice as sd
             import vosk
-            vosk.SetLogLevel(-1)
-            recognizer = vosk.KaldiRecognizer(vosk.Model(str(MODEL_DIR)), RATE, json.dumps(GRAMMAR))
+            recognizer = vosk.KaldiRecognizer(model(), RATE, json.dumps(GRAMMAR))
             recognizer.SetWords(True)
         except Exception as err:
             self.status = f"off ({err})"

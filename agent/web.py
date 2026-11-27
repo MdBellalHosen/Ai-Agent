@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import apps, brain, config, tools, voice, wake
+from . import apps, brain, config, files, tools, tray, voice, wake
 from .vision import image_url
 
 PAGE = Path(__file__).with_name("static") / "index.html"
@@ -44,6 +44,7 @@ class App:
         self.language, self.convo, self.listen_next = "bn", False, False
         self.last_seen = time.monotonic()
         self.wake = None
+        self.tray = None
 
     # ---------- shared state ----------
     @property
@@ -107,11 +108,13 @@ class App:
         with self.lock:
             self.state = state
 
-    def text_turn(self, text, picture=None, screen=False):
+    def text_turn(self, text, picture=None, screen=False, document=None):
         if screen:
             from PIL import ImageGrab
             picture = image_url(ImageGrab.grab())
-        self.add("user", text, image=bool(picture), screen=screen)
+        self.add("user", text, image=bool(picture), screen=screen, document=document)
+        if document:  # the model reads it with the read_document tool
+            text += f"\n\n[The user attached the file '{document}'. Read it with read_document.]"
         self.reply(text, picture)
         if self.listen_next:
             self.voice_loop()
@@ -121,8 +124,9 @@ class App:
 
     def voice_loop(self):
         while not self.cancel.is_set():
-            if self.private:
-                self.tell("প্রাইভেট মোডে মাইক বন্ধ। লিখে বলো।")
+            private = self.private
+            if private and not (self.language == "en" and voice.offline_ready()):
+                self.tell("প্রাইভেট মোডে শুধু English মাইক চলে (ইন্টারনেট ছাড়া)। উপরে English বেছে নাও, বা লিখে বলো।")
                 return
             if not voice.can_listen():
                 self.tell("মাইকের জন্য .env এ GEMINI_API_KEY বা GROQ_API_KEY লাগবে।")
@@ -139,7 +143,11 @@ class App:
                     " মাইকের আওয়াজ খুব কম। Windows Sound settings এ input volume বাড়াও." if loudest < 300 else ""))
                 return
             self.set_state("transcribing")
-            text = voice.transcribe(voice.wav_bytes(voice.boost(pcm)), self.language)
+            try:
+                text = voice.transcribe(voice.wav_bytes(voice.boost(pcm)), self.language, offline_only=private)
+            except voice.Offline as err:
+                self.tell(str(err))
+                return
             if not text:
                 self.tell("কথা বুঝতে পারিনি, আবার বলো।")
                 return
@@ -222,7 +230,7 @@ class App:
             voice.speak(message)
 
     def heard_wake(self):
-        if self.private or not voice.can_listen():
+        if not voice.can_listen():
             voice.chime()
             self.tell("Hey Mira শুনেছি, কিন্তু মাইক এখন বন্ধ। লিখে বলো।")
         elif not self.start("listening", self.wake_turn):  # also pauses the wake word
@@ -336,12 +344,22 @@ class Handler(BaseHTTPRequestHandler):
                 picture = decode_picture(data["image"]) if data.get("image") else None
             except ValueError as err:
                 return self.reply(400, {"error": str(err)})
+            document = None
+            if isinstance(data.get("document"), dict):
+                if app.private:
+                    return self.reply(400, {"error": "প্রাইভেট মোডে ফাইল পড়া যায় না"})
+                try:
+                    raw = base64.b64decode(str(data["document"].get("data", "")).partition(",")[2], validate=True)
+                    document = files.save_upload(data["document"].get("name", "document.pdf"), raw).name
+                except (ValueError, binascii.Error) as err:
+                    return self.reply(400, {"error": str(err) or "file bujhte parini"})
+                text = text or "এই ফাইলটা সহজ করে বুঝিয়ে দাও, মূল পয়েন্টগুলো বলো।"
             if picture or screen:
                 text = text or ("আমার স্ক্রিনে কী আছে বলো।" if screen else
                                 "এই ছবিটা বুঝিয়ে দাও। অঙ্ক থাকলে সমাধান করো।")
             if not text:
                 return self.reply(400, {"error": "kichu likho"})
-            ok = app.start("thinking", app.text_turn, text, picture, screen)
+            ok = app.start("thinking", app.text_turn, text, picture, screen, document)
             return self.reply(200 if ok else 409, {"ok": ok})
         if path == "/api/mic":
             return self.reply(200, {"ok": bool(app.mic())})
@@ -421,7 +439,7 @@ def watch(server):
     app = server.app
     while True:
         time.sleep(20)
-        wake_on = app.wake is not None and app.wake.is_alive()
+        wake_on = (app.wake is not None and app.wake.is_alive()) or app.tray is not None
         if (not wake_on and not app.busy() and not tools.reminders_pending()
                 and time.monotonic() - app.last_seen > IDLE_LIMIT):
             server.shutdown()
@@ -444,6 +462,7 @@ def serve(open_window=True, port=None):
     app.install()
     app.start_wake()
     apps.preload()
+    app.tray = tray.start(app, server, launch)
     print(f"{config.NAME} cholche: {url}")
     print("Wake word:", "on (Hey Mira)" if app.wake else "off")
     if open_window:
@@ -456,5 +475,7 @@ def serve(open_window=True, port=None):
     finally:
         if app.wake:
             app.wake.stop()
+        if app.tray:
+            app.tray.stop()
         server.server_close()
     return 0

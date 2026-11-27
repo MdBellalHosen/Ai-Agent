@@ -176,7 +176,26 @@ LAST_RECORDING = config.DATA / "last_voice.wav"
 
 
 def can_listen():
-    return bool(config.GEMINI_KEY or config.GROQ_KEY)
+    return bool(config.GEMINI_KEY or config.GROQ_KEY) or offline_ready()
+
+
+def offline_ready():
+    from . import wake
+    return wake.installed()
+
+
+class Offline(RuntimeError):
+    pass
+
+
+def offline(pcm, language):
+    """Without internet only English can be understood (small free Vosk model)."""
+    from . import wake
+    if language == "bn":
+        raise Offline("ইন্টারনেট ছাড়া শুধু English বুঝি। উপরে English বেছে নিয়ে বলো, বা লিখে বলো।")
+    if not wake.installed():
+        raise Offline("Offline model nai. Chalao: .venv\\Scripts\\python main.py --install")
+    return wake.offline_transcribe(pcm)
 
 
 def gemini_transcribe(wav, language):
@@ -216,8 +235,11 @@ def whisper_transcribe(wav, language):
     return "" if text == HINTS.get(language) else text  # silence sometimes echoes the hint
 
 
-def transcribe(wav, language="bn"):
-    """Speech to text. Gemini first, Whisper (Groq) as backup. .env STT=groq swaps the order."""
+def transcribe(wav, language="bn", offline_only=False):
+    """Speech to text. Gemini first, Whisper (Groq) as backup, then offline English.
+    .env STT=groq swaps the first two. offline_only: nothing leaves the PC (private mode)."""
+    if offline_only:
+        return offline(pcm_of(wav), language)
     if not can_listen():
         raise RuntimeError("Mic er jonno .env e GEMINI_API_KEY ba GROQ_API_KEY dao.")
     try:  # keep only the latest recording, on this PC, to check the mic if words come out wrong
@@ -237,7 +259,14 @@ def transcribe(wav, language="bn"):
         except Exception as err:
             print(f"  [{name} speech problem] {err}")
             problem = err
+    if offline_ready():
+        return offline(pcm_of(wav), language)
     raise RuntimeError(f"Kotha lekha gelo na: {problem}")
+
+
+def pcm_of(wav):
+    with wave.open(io.BytesIO(wav)) as w:
+        return w.readframes(w.getnframes())
 
 
 def listen(language):

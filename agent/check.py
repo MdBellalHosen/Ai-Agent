@@ -7,7 +7,8 @@ import tempfile
 
 from . import config, voice
 
-PACKAGES = ("openai", "dotenv", "edge_tts", "pygame", "sounddevice", "pyautogui", "PIL", "vosk", "sympy")
+PACKAGES = ("openai", "dotenv", "edge_tts", "pygame", "sounddevice", "pyautogui", "PIL", "vosk", "sympy", "pystray", "pypdf", "googleapiclient",
+            "google_auth_oauthlib")
 
 
 def report(name, action, required=True):
@@ -71,6 +72,18 @@ def math_check():
         raise RuntimeError(answer)
 
 
+def weather_check():
+    from . import info
+    return "(" + info.weather().splitlines()[0][:60] + ")"
+
+
+def google_check():
+    from . import google
+    if not google.ready():
+        raise RuntimeError("setup kora hoyni (optional, README dekho)")
+    return "(token ache)" if google.TOKEN.exists() else "(prothom bar Mira ke mail er kotha bolle sign in hobe)"
+
+
 def run(offline=False):
     version = sys.version.split()[0]
     print(f"Python {version}")
@@ -93,5 +106,7 @@ def run(offline=False):
     report("wake word (Hey Mira)", wake_word, required=False)
     report("app list", app_list, required=False)
     report("math (sympy)", math_check, required=False)
+    report("internet info (weather)", lambda: weather_check(), required=False)
+    report("Gmail/Calendar", google_check, required=False)
     print("\nSob thik." if ok else "\nUporer FAIL gulo thik koro.")
     return 0 if ok else 1
