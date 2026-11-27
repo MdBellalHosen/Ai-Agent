@@ -118,7 +118,8 @@ class TrayTests(unittest.TestCase):
         with mock.patch.object(pystray.Icon, "run_detached"):
             icon = web.tray.start(app, mock.Mock(), mock.Mock())
         self.assertIsNotNone(icon)
-        self.assertEqual(len([i for i in icon.menu.items if i.text]), 5)
+        names = [i.text for i in icon.menu.items if i is not pystray.Menu.SEPARATOR]
+        self.assertEqual(len(names), 5)
 
 
 class DocumentTests(DataFolder):
