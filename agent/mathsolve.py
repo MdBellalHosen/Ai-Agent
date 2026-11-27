@@ -144,9 +144,9 @@ def run(request):
 
 def main():
     try:
-        print(json.dumps({"result": run(json.loads(sys.stdin.read()))}, ensure_ascii=False))
+        print(json.dumps({"result": run(json.loads(sys.stdin.read()))}))  # ASCII only: Windows consoles
     except Exception as err:
-        print(json.dumps({"error": f"{type(err).__name__}: {err}"[:300]}, ensure_ascii=False))
+        print(json.dumps({"error": f"{type(err).__name__}: {err}"[:300]}))
 
 
 if __name__ == "__main__":
