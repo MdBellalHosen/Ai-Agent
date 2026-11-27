@@ -29,3 +29,9 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           .venv\Scripts\python -c "from agent import check, config; [check.synthesize(v, t) or print('OK', v) for v, t in ((config.VOICE_BN, 'আমি প্রস্তুত।'), (config.VOICE_EN, 'I am ready.'))]"
+      - name: Desktop shortcut
+        run: .venv\Scripts\python -c "from agent import shortcut; print(shortcut.install(startup=False))"
+      - name: Wake word model knows the words (downloads ~40 MB)
+        continue-on-error: true
+        run: |
+          .venv\Scripts\python -c "from agent import wake; wake.download(); import vosk, json; vosk.SetLogLevel(0); r = vosk.KaldiRecognizer(vosk.Model(str(wake.MODEL_DIR)), 16000, json.dumps(wake.GRAMMAR)); print('grammar loaded')"

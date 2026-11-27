@@ -8,8 +8,10 @@ if errorlevel 1 goto fail
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 goto fail
 if not exist ".env" copy ".env.example" ".env" >nul
+if not defined CI ".venv\Scripts\python.exe" main.py --install
 echo.
 echo Setup shesh. .env file e API key boshao, save koro, tarpor check.bat chalao.
+echo Tarpor Desktop er Mira icon e double click koro, ba bolo "Hey Mira".
 if defined CI exit /b 0
 notepad .env
 pause

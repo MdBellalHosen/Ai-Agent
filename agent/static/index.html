@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mira</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%237c5cf6'/%3E%3Ctext x='32' y='43' font-size='32' text-anchor='middle' fill='white' font-family='Segoe UI' font-weight='700'%3EM%3C/text%3E%3C/svg%3E">
+<style nonce="__NONCE__">
+:root {
+  --bg: #14121f; --panel: #1d1a2c; --panel2: #262238; --line: #332e4a;
+  --text: #ece9f7; --muted: #9d97b8; --accent: #8b6cf6; --accent2: #c084fc;
+  --user: #3b2f7a; --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Segoe UI", "Nirmala UI", "Noto Sans Bengali", system-ui, sans-serif;
+  background: radial-gradient(120% 80% at 50% 0%, #241d40 0%, var(--bg) 60%);
+  color: var(--text); display: flex; flex-direction: column; font-size: 15px;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+button:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.avatar { position: relative; width: 46px; height: 46px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent2)); display: grid; place-items: center;
+  font-weight: 700; font-size: 20px; color: #fff; }
+.avatar::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid transparent; }
+body[data-state="listening"] .avatar::after { border-color: var(--bad); animation: pulse 1.2s infinite; }
+body[data-state="speaking"] .avatar::after { border-color: var(--accent2); animation: pulse .8s infinite; }
+body[data-state="thinking"] .avatar::after, body[data-state="transcribing"] .avatar::after {
+  border-color: var(--accent2) transparent; animation: spin 1s linear infinite; }
+@keyframes pulse { 0% { transform: scale(1); opacity: 1 } 100% { transform: scale(1.35); opacity: 0 } }
+@keyframes spin { to { transform: rotate(360deg) } }
+.who { flex: 1; min-width: 0; }
+.who b { display: block; font-size: 17px; }
+.who span { color: var(--muted); font-size: 13px; }
+.icon { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
+.icon:hover { background: var(--panel2); color: var(--text); }
+.icon.on { color: var(--accent2); background: var(--panel2); }
+select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; font: inherit; font-size: 13px; }
+
+.banner { display: none; padding: 8px 16px; font-size: 13px; background: #2a2440; color: var(--warn); border-bottom: 1px solid var(--line); }
+body.private .banner { display: block; }
+
+main { flex: 1; overflow-y: auto; padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 10px; }
+.empty { margin: auto; text-align: center; color: var(--muted); max-width: 320px; line-height: 1.7; }
+.empty b { color: var(--text); font-size: 18px; display: block; margin-bottom: 6px; }
+.msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+.msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 4px; }
+.msg.mira { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.error { align-self: center; color: var(--bad); font-size: 13px; background: none; }
+.msg .tag { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.msg.reminder { border-color: var(--warn); }
+.typing { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 4px 6px; display: none; }
+body[data-state="thinking"] .typing, body[data-state="transcribing"] .typing { display: block; }
+
+footer { padding: 10px 14px 14px; border-top: 1px solid var(--line); background: rgba(20,18,31,.7); }
+.voice { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 10px; }
+.mic { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
+  box-shadow: 0 6px 24px rgba(139,108,246,.35); transition: transform .15s; }
+.mic svg { width: 28px; height: 28px; }
+.mic:hover { transform: scale(1.05); }
+body[data-state="listening"] .mic { background: var(--bad); box-shadow: 0 0 0 calc(var(--lvl, 0) * 18px) rgba(248,113,113,.25); }
+body.private .mic { opacity: .4; }
+.side { width: 110px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.switch { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px; background: var(--panel2); font-size: 12px; color: var(--muted); }
+.switch.on { color: var(--text); background: var(--user); }
+.stop { visibility: hidden; padding: 6px 12px; border-radius: 20px; background: var(--panel2); font-size: 12px; }
+body:not([data-state="idle"]) .stop { visibility: visible; }
+.hint { text-align: center; font-size: 12px; color: var(--muted); min-height: 18px; margin-bottom: 8px; }
+.notice { color: var(--warn); }
+.compose { display: flex; align-items: flex-end; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 6px; }
+textarea { flex: 1; resize: none; border: 0; background: none; color: var(--text); font: inherit; padding: 8px 6px; max-height: 140px; min-height: 22px; }
+textarea:focus { outline: none; }
+.send { background: var(--accent); color: #fff; }
+.send:hover { background: var(--accent2); color: #fff; }
+.preview { display: none; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+.preview.show { display: flex; }
+.preview img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+
+.dialog { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; padding: 20px; }
+.dialog.show { display: grid; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; max-width: 360px; width: 100%; }
+.card h3 { margin: 0 0 8px; font-size: 16px; color: var(--warn); }
+.card p { margin: 0 0 16px; line-height: 1.6; }
+.row { display: flex; gap: 8px; justify-content: flex-end; }
+.btn { padding: 9px 16px; border-radius: 10px; background: var(--panel2); }
+.btn.yes { background: var(--accent); color: #fff; }
+.menu { position: absolute; right: 14px; top: 62px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: none; z-index: 5; min-width: 180px; }
+.menu.show { display: block; }
+.menu button { display: block; width: 100%; text-align: left; padding: 9px 12px; border-radius: 8px; }
+.menu button:hover { background: var(--panel2); }
+.drop { outline: 2px dashed var(--accent2); outline-offset: -8px; }
+</style>
+</head>
+<body data-state="idle">
+<header>
+  <div class="avatar" id="avatar">M</div>
+  <div class="who"><b id="name">Mira</b><span id="status">তৈরি</span></div>
+  <select id="lang" title="কোন ভাষায় কথা বলবে">
+    <option value="bn">বাংলা</option><option value="en">English</option><option value="">Auto</option>
+  </select>
+  <button class="icon" id="privateBtn" title="প্রাইভেট মোড"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+  <button class="icon" id="muteBtn" title="ভয়েস চালু/বন্ধ"><svg viewBox="0 0 24 24" id="muteIcon"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+  <button class="icon" id="menuBtn" title="আরও"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+</header>
+<div class="menu" id="menu">
+  <button id="clearBtn">নতুন করে কথা শুরু</button>
+  <button id="quitBtn">মিরা বন্ধ করো</button>
+</div>
+<div class="banner">প্রাইভেট মোড: কথা শুধু এই পিসির Ollama তে যাবে। মাইক আর ভয়েস বন্ধ।</div>
+
+<main id="chat">
+  <div class="empty" id="empty"><b>হ্যালো!</b>মাইকে চাপ দিয়ে কথা বলো, অথবা নিচে লিখে পাঠাও।</div>
+  <div class="typing" id="typing">ভাবছি...</div>
+</main>
+
+<footer>
+  <div class="voice">
+    <div class="side"><button class="switch" id="convoBtn" title="উত্তরের পরে নিজে থেকেই আবার শুনবে">একটানা কথা</button></div>
+    <button class="mic" id="micBtn" title="কথা বলো"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
+    <div class="side"><button class="stop" id="stopBtn">থামাও</button></div>
+  </div>
+  <div class="hint" id="hint"></div>
+  <div class="preview" id="preview"><img id="previewImg" alt=""><span>ছবি যোগ হয়েছে</span><button class="icon" id="removeImg" title="ছবি বাদ দাও"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+  <div class="compose">
+    <button class="icon" id="imageBtn" title="ছবি যোগ করো (Ctrl+V দিয়েও হবে)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></button>
+    <button class="icon" id="screenBtn" title="স্ক্রিন দেখাও"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+    <textarea id="input" rows="1" placeholder="এখানে লেখো..."></textarea>
+    <button class="icon send" id="sendBtn" title="পাঠাও"><svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+</footer>
+
+<div class="dialog" id="dialog">
+  <div class="card">
+    <h3>অনুমতি লাগবে</h3>
+    <p id="question"></p>
+    <div class="row"><button class="btn" id="noBtn">না</button><button class="btn yes" id="yesBtn">হ্যাঁ, করো</button></div>
+  </div>
+</div>
+
+<script nonce="__NONCE__">
+const TOKEN = "__TOKEN__";
+const $ = id => document.getElementById(id);
+const STATUS = { idle: "তৈরি", listening: "শুনছি... বলা শেষ হলে থামলেই হবে", transcribing: "কথা লিখছি...",
+  thinking: "ভাবছি...", confirm: "তোমার অনুমতির অপেক্ষা", speaking: "বলছি..." };
+const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "ওয়েবসাইট", web_search: "সার্চ", volume: "ভলিউম",
+  take_screenshot: "স্ক্রিনশট", find_file: "ফাইল খোঁজা", lock_pc: "পিসি লক", shutdown_pc: "শাটডাউন",
+  add_note: "নোট", read_notes: "নোট পড়া", remember: "মনে রাখা", set_reminder: "রিমাইন্ডার", calculate: "হিসাব" };
+let last = 0, view = null, picture = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
+
+async function api(path, body) {
+  const options = { headers: { "X-Token": TOKEN } };
+  if (body !== undefined) { options.method = "POST"; options.body = JSON.stringify(body); options.headers["Content-Type"] = "application/json"; }
+  const res = await fetch(path, options);
+  if (res.status === 403) { location.reload(); throw new Error("reload"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && data.error) hint(data.error, true);
+  return data;
+}
+
+function hint(text, notice) { const h = $("hint"); h.textContent = text || ""; h.classList.toggle("notice", !!notice); }
+
+function addMessage(m) {
+  $("empty").style.display = "none";
+  const div = document.createElement("div");
+  div.className = "msg " + m.role + (m.reminder ? " reminder" : "");
+  div.textContent = m.text;
+  const tags = [];
+  if (m.voice) tags.push("মাইক থেকে");
+  if (m.image) tags.push(m.screen ? "স্ক্রিন সহ" : "ছবি সহ");
+  (m.tools || []).forEach(t => tags.push(TOOLS[t] || t));
+  if (tags.length) { const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = tags.join(" · "); div.appendChild(tag); }
+  $("chat").insertBefore(div, $("typing"));
+  div.scrollIntoView({ block: "end", behavior: "smooth" });
+}
+
+function render(s) {
+  if (view !== null && view !== s.private) {  // switched mode: show the other chat
+    document.querySelectorAll(".msg").forEach(e => e.remove());
+    $("empty").style.display = ""; last = 0; view = s.private; return true;
+  }
+  view = s.private;
+  s.messages.forEach(m => { addMessage(m); last = Math.max(last, m.id); });
+  document.body.dataset.state = s.state;
+  document.body.classList.toggle("private", s.private);
+  document.body.style.setProperty("--lvl", s.level);
+  $("name").textContent = s.name;
+  $("avatar").textContent = (s.name || "M")[0].toUpperCase();
+  document.title = s.name;
+  let status = STATUS[s.state] || s.state;
+  if (s.state === "idle" && s.wake === "listening") status = "তৈরি · \"Hey Mira\" শুনছি";
+  $("status").textContent = status;
+  $("privateBtn").classList.toggle("on", s.private);
+  $("muteBtn").classList.toggle("on", s.muted);
+  $("muteIcon").innerHTML = s.muted ? '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/>'
+    : '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>';
+  $("convoBtn").classList.toggle("on", s.convo);
+  if (document.activeElement !== $("lang")) $("lang").value = s.language;
+  if (s.notice.id > shownNotice) { shownNotice = s.notice.id; hint(s.notice.text, true); }
+  else if (s.state === "listening") hint("বলো... শেষ হলে চুপ থাকো বা মাইকে আবার চাপো");
+  else if (s.state === "speaking") hint("মাঝখানে বলতে চাইলে মাইকে চাপো");
+  else if (wasActive && s.state === "idle") hint("");
+  wasActive = s.state !== "idle";
+  pendingAsk = s.ask;
+  if (s.state === "confirm" && s.ask > answeredAsk) { $("question").textContent = s.question; $("dialog").classList.add("show"); $("yesBtn").focus(); }
+  else if (s.state !== "confirm") $("dialog").classList.remove("show");
+}
+
+async function poll() {
+  let again = false;
+  try { again = render(await api("/api/updates?after=" + last)); }
+  catch (e) { if (e.message !== "reload") $("status").textContent = "মিরা বন্ধ আছে"; }
+  setTimeout(poll, again ? 0 : document.body.dataset.state === "idle" ? 700 : 250);
+}
+
+async function send() {
+  const text = $("input").value.trim();
+  if (!text && !picture) return;
+  const res = await api("/api/send", { text, image: picture });
+  if (res.ok) { $("input").value = ""; grow(); setPicture(null); }
+  else if (!res.error) hint("একটু অপেক্ষা করো, আগের কাজ চলছে।", true);
+}
+
+function setPicture(url) {
+  picture = url;
+  $("preview").classList.toggle("show", !!url);
+  if (url) $("previewImg").src = url;
+}
+
+function loadPicture(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    setPicture(canvas.toDataURL("image/jpeg", 0.9));
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function grow() { const t = $("input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }
+
+async function screen() {
+  const text = $("input").value.trim();
+  for (let i = 3; i > 0; i--) { hint(i + " সেকেন্ড পর স্ক্রিন দেখব। যে জিনিস দেখাতে চাও সেটা সামনে আনো।"); await new Promise(r => setTimeout(r, 1000)); }
+  hint("");
+  const res = await api("/api/send", { text, screen: true });
+  if (res.ok) { $("input").value = ""; grow(); }
+}
+
+function answer(yes) { answeredAsk = pendingAsk; $("dialog").classList.remove("show"); api("/api/confirm", { ask: pendingAsk, yes }); }
+
+$("micBtn").addEventListener("click", () => api("/api/mic", {}));
+$("stopBtn").addEventListener("click", () => api("/api/stop", {}));
+$("sendBtn").addEventListener("click", send);
+$("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("input").addEventListener("input", grow);
+$("imageBtn").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", e => { loadPicture(e.target.files[0]); e.target.value = ""; });
+$("removeImg").addEventListener("click", () => setPicture(null));
+$("screenBtn").addEventListener("click", screen);
+$("privateBtn").addEventListener("click", () => api("/api/settings", { private: !document.body.classList.contains("private") }));
+$("muteBtn").addEventListener("click", () => api("/api/settings", { muted: !$("muteBtn").classList.contains("on") }));
+$("convoBtn").addEventListener("click", () => api("/api/settings", { convo: !$("convoBtn").classList.contains("on") }));
+$("lang").addEventListener("change", e => api("/api/settings", { language: e.target.value }));
+$("yesBtn").addEventListener("click", () => answer(true));
+$("noBtn").addEventListener("click", () => answer(false));
+$("menuBtn").addEventListener("click", e => { e.stopPropagation(); $("menu").classList.toggle("show"); });
+document.addEventListener("click", () => $("menu").classList.remove("show"));
+$("clearBtn").addEventListener("click", async () => {
+  const res = await api("/api/clear", {});
+  if (res.ok) { document.querySelectorAll(".msg").forEach(e => e.remove()); $("empty").style.display = ""; }
+});
+$("quitBtn").addEventListener("click", async () => { await api("/api/quit", {}); $("status").textContent = "মিরা বন্ধ হয়েছে। জানালাটা বন্ধ করে দাও।"; window.close(); });
+document.addEventListener("paste", e => { const item = [...e.clipboardData.items].find(i => i.type.startsWith("image/")); if (item) { e.preventDefault(); loadPicture(item.getAsFile()); } });
+document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drop"); });
+document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("drop"); });
+document.addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("drop"); loadPicture(e.dataTransfer.files[0]); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") api("/api/stop", {});
+  if (e.ctrlKey && e.code === "Space") { e.preventDefault(); api("/api/mic", {}); }
+});
+poll();
+</script>
+</body>
+</html>

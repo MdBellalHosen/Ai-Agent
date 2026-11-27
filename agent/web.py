@@ -1,0 +1,459 @@
+"""The window app: a small web server that only this PC can reach (127.0.0.1).
+
+The page is only the screen. Microphone, voice, tools and wake word all run here in Python.
+"""
+import base64
+import binascii
+import io
+import json
+import os
+import secrets
+import subprocess
+import threading
+import time
+import urllib.request
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+from . import brain, config, tools, voice, wake
+from .vision import image_url
+
+PAGE = Path(__file__).with_name("static") / "index.html"
+MAX_BODY = 20 * 1024 * 1024
+IDLE_LIMIT = 300  # seconds without a window before the server closes (when wake word is off)
+LANGUAGES = ("bn", "en", "")
+CHIME_DELAY = 0.35  # let the chime finish before recording
+
+
+class App:
+    def __init__(self, url=""):
+        self.url = url
+        self.token = secrets.token_urlsafe(24)
+        self.lock = threading.RLock()
+        self.state = "idle"  # idle listening transcribing thinking confirm speaking
+        self.level = 0.0
+        self.messages, self.next_id = [], 1
+        self.notice = {"id": 0, "text": ""}
+        self.question, self.ask_id, self.approved = None, 0, False
+        self.decided = threading.Event()
+        self.finish, self.cancel = threading.Event(), threading.Event()
+        self.worker = None
+        self.used_tools = []
+        self.language, self.convo, self.listen_next = "bn", False, False
+        self.last_seen = time.monotonic()
+        self.wake = None
+
+    # ---------- shared state ----------
+    @property
+    def private(self):
+        return voice.settings["private"]
+
+    def busy(self):
+        return self.state != "idle"
+
+    def page_open(self):
+        return time.monotonic() - self.last_seen < 6
+
+    def add(self, role, text, **extra):
+        with self.lock:
+            message = {"id": self.next_id, "role": role, "text": text,
+                       "private": self.private, **extra}
+            self.next_id += 1
+            self.messages.append(message)
+            del self.messages[:-300]
+            return message
+
+    def tell(self, text):
+        with self.lock:
+            self.notice = {"id": self.notice["id"] + 1, "text": text}
+
+    def snapshot(self, after=0):
+        with self.lock:
+            return {
+                "state": self.state, "level": round(min(self.level / 3000, 1.0), 2),
+                "name": config.NAME, "private": self.private, "muted": voice.settings["muted"],
+                "language": self.language, "convo": self.convo, "notice": self.notice,
+                "question": self.question if self.state == "confirm" else None, "ask": self.ask_id,
+                "mic": bool(config.GROQ_KEY), "wake": self.wake.status if self.wake else "off",
+                "messages": [m for m in self.messages if m["id"] > after and m["private"] == self.private],
+            }
+
+    # ---------- turns ----------
+    def start(self, first_state, job, *args):
+        with self.lock:
+            if self.busy():
+                return False
+            self.state = first_state
+            self.finish.clear()
+            self.cancel.clear()
+            self.listen_next = False
+            self.worker = threading.Thread(target=self._run, args=(job, args), daemon=True)
+            self.worker.start()
+            return True
+
+    def _run(self, job, args):
+        try:
+            job(*args)
+        except Exception as err:
+            print(f"  [problem] {err}")
+            self.add("error", f"সমস্যা: {err}")
+        finally:
+            with self.lock:
+                self.state, self.level, self.question = "idle", 0.0, None
+
+    def set_state(self, state):
+        with self.lock:
+            self.state = state
+
+    def text_turn(self, text, picture=None, screen=False):
+        if screen:
+            from PIL import ImageGrab
+            picture = image_url(ImageGrab.grab())
+        self.add("user", text, image=bool(picture), screen=screen)
+        self.reply(text, picture)
+        if self.listen_next:
+            self.voice_loop()
+
+    def voice_turn(self):
+        self.voice_loop()
+
+    def voice_loop(self):
+        while not self.cancel.is_set():
+            if self.private:
+                self.tell("প্রাইভেট মোডে মাইক বন্ধ। লিখে বলো।")
+                return
+            if not config.GROQ_KEY:
+                self.tell("মাইকের জন্য .env এ GROQ_API_KEY লাগবে।")
+                return
+            self.set_state("listening")
+            self.finish.clear()
+            self.listen_next = False
+            pcm, loudest = voice.record(self.finish, self.cancel, on_level=self.on_level)
+            self.level = 0.0
+            if self.cancel.is_set():
+                return
+            if not pcm:
+                self.tell("কিছু শুনতে পাইনি।" + (
+                    " মাইকের আওয়াজ খুব কম। Windows Sound settings এ input volume বাড়াও." if loudest < 300 else ""))
+                return
+            self.set_state("transcribing")
+            text = voice.transcribe(voice.wav_bytes(voice.boost(pcm)), self.language)
+            if not text:
+                self.tell("কথা বুঝতে পারিনি, আবার বলো।")
+                return
+            self.add("user", text, voice=True)
+            self.reply(text)
+            if not (self.convo or self.listen_next):
+                return
+
+    def on_level(self, level):
+        self.level = level
+
+    def reply(self, text, picture=None):
+        self.set_state("thinking")
+        self.used_tools = []
+        answer = brain.ask(text, image=picture, private=self.private)
+        self.add("mira", answer, tools=list(self.used_tools))
+        if self.cancel.is_set() or voice.settings["muted"] or self.private:
+            return
+        self.set_state("speaking")
+        voice.speak(answer)
+
+    # ---------- buttons ----------
+    def mic(self):
+        """Mic button: start listening, finish listening, or interrupt Mira."""
+        with self.lock:
+            if self.state == "idle":
+                return self.start("listening", self.voice_turn)
+            if self.state == "listening":
+                self.finish.set()
+                return True
+            if self.state == "speaking":
+                self.listen_next = True
+                voice.stop_speaking()
+                return True
+            if self.state == "thinking":
+                self.listen_next = True
+                return True
+            return False
+
+    def stop(self):
+        self.cancel.set()
+        self.listen_next = False
+        voice.stop_speaking()
+        if self.state == "confirm":
+            self.decide(self.ask_id, False)
+
+    def decide(self, ask, yes):
+        with self.lock:
+            if self.state != "confirm" or ask != self.ask_id:
+                return False
+            self.approved = bool(yes)
+            self.decided.set()
+            return True
+
+    # ---------- hooks used by tools.py ----------
+    def confirm(self, question):
+        if threading.current_thread() is not self.worker:
+            return False  # only the current request can ask, and only a click can approve
+        with self.lock:
+            previous = self.state
+            self.question, self.ask_id, self.approved = question, self.ask_id + 1, False
+            self.decided.clear()
+            self.state = "confirm"
+        if not self.page_open() and self.url:
+            launch(self.url)
+        allowed = self.decided.wait(120) and self.approved
+        with self.lock:
+            self.question, self.state = None, previous
+        return allowed
+
+    def tool_used(self, name):
+        if threading.current_thread() is self.worker:
+            self.used_tools.append(name)
+
+    def announce(self, message):
+        self.add("mira", f"রিমাইন্ডার: {message}", reminder=True)
+        if not self.page_open() and self.url:
+            launch(self.url)
+        if not self.busy():
+            voice.speak(message)
+
+    def heard_wake(self):
+        if self.private or not config.GROQ_KEY:
+            voice.chime()
+            self.tell("Hey Mira শুনেছি, কিন্তু মাইক এখন বন্ধ। লিখে বলো।")
+        elif not self.start("listening", self.wake_turn):  # also pauses the wake word
+            return
+        if not self.page_open() and self.url:
+            launch(self.url)
+
+    def wake_turn(self):
+        voice.chime()
+        time.sleep(CHIME_DELAY)
+        self.voice_loop()
+
+    def install(self):
+        tools.hooks.update(confirm=self.confirm, announce=self.announce, tool=self.tool_used)
+
+    def start_wake(self):
+        if wake.enabled() and wake.installed():
+            self.wake = wake.Listener(self.heard_wake, paused=self.busy)
+            self.wake.start()
+
+
+def decode_picture(data_url):
+    head, _, data = str(data_url).partition(",")
+    if not (head.startswith("data:image/") and head.endswith(";base64")):
+        raise ValueError("chobi bujhte parini")
+    from PIL import Image
+    try:
+        return image_url(Image.open(io.BytesIO(base64.b64decode(data, validate=True))))
+    except (binascii.Error, OSError) as err:
+        raise ValueError("chobi bujhte parini") from err
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "Mira"
+    sys_version = ""
+
+    def log_message(self, *args):
+        pass
+
+    @property
+    def app(self):
+        return self.server.app
+
+    def reply(self, code, body=None, kind="application/json; charset=utf-8", headers=()):
+        data = body if isinstance(body, bytes) else json.dumps(body or {}, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        for name, value in headers:
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def checked(self, need_token=True):
+        """Only this PC's own page may talk to the server."""
+        port = self.server.server_address[1]
+        if self.headers.get("Host", "") not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+            self.reply(403, {"error": "host"})
+            return False
+        if need_token and not secrets.compare_digest(self.headers.get("X-Token", ""), self.app.token):
+            self.reply(403, {"error": "token"})
+            return False
+        if need_token:
+            self.app.last_seen = time.monotonic()
+        return True
+
+    def do_GET(self):
+        url = urlparse(self.path)
+        if url.path == "/":
+            if not self.checked(need_token=False):
+                return
+            nonce = secrets.token_urlsafe(16)
+            page = PAGE.read_text(encoding="utf-8").replace("__TOKEN__", self.app.token)
+            page = page.replace("__NONCE__", nonce)
+            policy = (f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; "
+                      "img-src data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
+                      "frame-ancestors 'none'")
+            return self.reply(200, page.encode(), "text/html; charset=utf-8",
+                              [("Content-Security-Policy", policy)])
+        if url.path == "/api/ping":
+            return self.checked(need_token=False) and self.reply(200, {"app": "mira"})
+        if not self.checked():
+            return
+        if url.path == "/api/updates":
+            after = parse_qs(url.query).get("after", ["0"])[0]
+            return self.reply(200, self.app.snapshot(int(after) if after.isdigit() else 0))
+        self.reply(404, {"error": "not found"})
+
+    def do_POST(self):
+        if not self.checked():
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_BODY:
+            self.close_connection = True
+            return self.reply(413, {"error": "khub boro"})
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(data, dict):
+                raise ValueError
+        except ValueError:
+            return self.reply(400, {"error": "bad request"})
+        app, path = self.app, urlparse(self.path).path
+
+        if path == "/api/send":
+            text = str(data.get("text") or "").strip()[:4000]
+            screen = bool(data.get("screen"))
+            try:
+                picture = decode_picture(data["image"]) if data.get("image") else None
+            except ValueError as err:
+                return self.reply(400, {"error": str(err)})
+            if picture or screen:
+                text = text or ("আমার স্ক্রিনে কী আছে বলো।" if screen else
+                                "এই ছবিটা বুঝিয়ে দাও। অঙ্ক থাকলে সমাধান করো।")
+            if not text:
+                return self.reply(400, {"error": "kichu likho"})
+            ok = app.start("thinking", app.text_turn, text, picture, screen)
+            return self.reply(200 if ok else 409, {"ok": ok})
+        if path == "/api/mic":
+            return self.reply(200, {"ok": bool(app.mic())})
+        if path == "/api/stop":
+            app.stop()
+            return self.reply(200, {"ok": True})
+        if path == "/api/confirm":
+            return self.reply(200, {"ok": app.decide(data.get("ask"), data.get("yes") is True)})
+        if path == "/api/settings":
+            if "private" in data:
+                if app.busy():
+                    return self.reply(409, {"error": "ekhon kaj cholche"})
+                voice.settings["private"] = bool(data["private"])
+            if "muted" in data:
+                voice.settings["muted"] = bool(data["muted"])
+                if voice.settings["muted"]:
+                    voice.stop_speaking()
+            if "convo" in data:
+                app.convo = bool(data["convo"])
+            if data.get("language") in LANGUAGES:
+                app.language = data["language"]
+            return self.reply(200, app.snapshot(10 ** 9))
+        if path == "/api/clear":
+            if app.busy():
+                return self.reply(409, {"error": "ekhon kaj cholche"})
+            with app.lock:
+                app.messages = [m for m in app.messages if m["private"] != app.private]
+            (brain.private_history if app.private else brain.history).clear()
+            return self.reply(200, {"ok": True})
+        if path == "/api/quit":
+            self.reply(200, {"ok": True})
+            app.stop()
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
+        self.reply(404, {"error": "not found"})
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = os.name != "nt"  # on Windows it would let two copies share a port
+
+
+def make_server(port):
+    server = Server(("127.0.0.1", port), Handler)
+    server.app = App(f"http://127.0.0.1:{server.server_address[1]}/")
+    return server
+
+
+def running(url):
+    try:
+        with urllib.request.urlopen(url + "api/ping", timeout=2) as response:
+            return json.load(response).get("app") == "mira"
+    except Exception:
+        return False
+
+
+def browsers():
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"),
+                 os.environ.get("LOCALAPPDATA")):
+        for name in (r"Microsoft\Edge\Application\msedge.exe", r"Google\Chrome\Application\chrome.exe"):
+            if base and Path(base, name).is_file():
+                yield str(Path(base, name))
+
+
+def launch(url):
+    """Open the page as its own app window (Edge or Chrome), else in the normal browser."""
+    for exe in browsers():
+        try:
+            subprocess.Popen([exe, f"--app={url}", "--window-size=520,820"])
+            return
+        except OSError:
+            continue
+    webbrowser.open(url)
+
+
+def watch(server):
+    app = server.app
+    while True:
+        time.sleep(20)
+        wake_on = app.wake is not None and app.wake.is_alive()
+        if (not wake_on and not app.busy() and not tools.reminders_pending()
+                and time.monotonic() - app.last_seen > IDLE_LIMIT):
+            server.shutdown()
+            return
+
+
+def serve(open_window=True, port=None):
+    port = int(port or config.env("WEB_PORT", "8765"))
+    url = f"http://127.0.0.1:{port}/"
+    try:
+        server = make_server(port)
+    except OSError:
+        if running(url):  # already open, e.g. started at login for "Hey Mira"
+            if open_window:
+                launch(url)
+            return 0
+        print(f"Port {port} e onno program cholche. .env e WEB_PORT=8770 likhe abar chalao.")
+        return 1
+    app = server.app
+    app.install()
+    app.start_wake()
+    print(f"{config.NAME} cholche: {url}")
+    print("Wake word:", "on (Hey Mira)" if app.wake else "off")
+    if open_window:
+        launch(url)
+    threading.Thread(target=watch, args=(server,), daemon=True).start()
+    try:
+        server.serve_forever(poll_interval=0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if app.wake:
+            app.wake.stop()
+        server.server_close()
+    return 0

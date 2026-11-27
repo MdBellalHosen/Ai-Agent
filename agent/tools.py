@@ -17,9 +17,21 @@ from .calculator import calculate
 from .memory import add_note, read_notes, remember
 
 
+# The window app replaces these: confirm -> a Yes/No button, announce -> chat message.
+hooks = {"confirm": None, "announce": None, "tool": None}
+reminders = []
+
+
 def confirm(question):
-    """Risky actions need a typed 'yes' from the keyboard. Voice cannot approve."""
+    """Risky actions need a typed 'yes' or a button click. Voice cannot approve."""
+    if hooks["confirm"]:
+        return bool(hooks["confirm"](question))
     return input(f"\n[CONFIRM] {question} Type yes to allow: ").strip().lower() == "yes"
+
+
+def reminders_pending():
+    reminders[:] = [t for t in reminders if t.is_alive()]
+    return bool(reminders)
 
 
 def open_app(app):
@@ -110,12 +122,15 @@ def set_reminder(minutes, message):
         return "minutes must be between 0 and 1440"
 
     def ring():
+        if hooks["announce"]:
+            return hooks["announce"](message)
         print(f"\n[REMINDER] {message}")
         voice.speak(message)  # stays silent when muted or in private mode
 
     timer = threading.Timer(minutes * 60, ring)
     timer.daemon = True
     timer.start()
+    reminders.append(timer)
     return f"Reminder set for {minutes:g} minutes (works while the program is open)"
 
 
@@ -150,6 +165,8 @@ SCHEMAS = [schema for _, _, schema in TOOL_LIST]
 def run_tool(name, arguments):
     try:
         print(f"  [tool] {name} {arguments}")
+        if hooks["tool"]:
+            hooks["tool"](name)
         return str(FUNCTIONS[name](**json.loads(arguments or "{}")))
     except Exception as err:  # report the problem to the model instead of crashing
         return f"Tool error: {err}"

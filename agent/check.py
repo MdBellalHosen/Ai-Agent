@@ -7,7 +7,7 @@ import tempfile
 
 from . import config, voice
 
-PACKAGES = ("openai", "dotenv", "edge_tts", "pygame", "sounddevice", "pyautogui", "PIL")
+PACKAGES = ("openai", "dotenv", "edge_tts", "pygame", "sounddevice", "pyautogui", "PIL", "vosk")
 
 
 def report(name, action, required=True):
@@ -45,6 +45,17 @@ def synthesize(name, text):
         os.remove(path)
 
 
+def wake_word():
+    from . import wake
+    if not wake.enabled():
+        return "(.env e WAKE_WORD=off)"
+    if not wake.installed():
+        raise RuntimeError("model nai. Chalao: .venv\\Scripts\\python main.py --install")
+    import vosk
+    vosk.SetLogLevel(-1)
+    vosk.Model(str(wake.MODEL_DIR))
+
+
 def run(offline=False):
     version = sys.version.split()[0]
     print(f"Python {version}")
@@ -64,5 +75,6 @@ def run(offline=False):
     report("microphone", microphone, required=False)
     for name, text in ((config.VOICE_BN, "আমি প্রস্তুত।"), (config.VOICE_EN, "I am ready.")):
         report(f"voice {name}", lambda n=name, t=text: synthesize(n, t), required=False)
+    report("wake word (Hey Mira)", wake_word, required=False)
     print("\nSob thik." if ok else "\nUporer FAIL gulo thik koro.")
     return 0 if ok else 1
