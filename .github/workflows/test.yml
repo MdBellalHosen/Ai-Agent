@@ -1,0 +1,31 @@
+name: Windows test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run setup.bat
+        shell: cmd
+        run: call setup.bat
+      - name: Check packages
+        run: .venv\Scripts\python main.py --check --offline
+      - name: Unit tests
+        run: .venv\Scripts\python -m unittest -v
+      - name: Female voices (needs Microsoft's online service)
+        continue-on-error: true
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          .venv\Scripts\python -c "from agent import check, config; [check.synthesize(v, t) or print('OK', v) for v, t in ((config.VOICE_BN, 'আমি প্রস্তুত।'), (config.VOICE_EN, 'I am ready.'))]"
