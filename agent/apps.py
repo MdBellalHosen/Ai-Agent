@@ -21,7 +21,7 @@ BLOCKED = ("uninstall", "remove", "repair", "reset", "recovery", "installer", "s
            "control panel", "services", "group policy", "system configuration")
 REFRESH = 600  # seconds
 
-_cache = {"time": 0.0, "apps": {}}
+_cache = {"time": None, "apps": {}}
 _lock = threading.Lock()
 
 LIST_SCRIPT = ("[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
@@ -72,7 +72,8 @@ def start_menu_shortcuts():
 def installed(refresh=False):
     """{name: target}. Store apps come as shell:AppsFolder targets, others as .lnk paths."""
     with _lock:
-        if refresh or time.monotonic() - _cache["time"] > REFRESH:
+        # time is None until the first look: monotonic() starts near 0 right after Windows boots
+        if refresh or _cache["time"] is None or time.monotonic() - _cache["time"] > REFRESH:
             found = {}
             try:
                 found = start_menu_shortcuts()

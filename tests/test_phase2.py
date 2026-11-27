@@ -16,6 +16,7 @@ START_MENU = {"WhatsApp": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvany
               "Word": "shell:AppsFolder\\Microsoft.Office.WINWORD.EXE.15",
               "Microsoft Teams": "shell:AppsFolder\\MSTeams_8wekyb3d8bbwe!MSTeams"}
 HAS_SYMPY = importlib.util.find_spec("sympy") is not None
+REAL_INSTALLED = apps.installed
 
 
 class AppTests(unittest.TestCase):
@@ -78,6 +79,13 @@ class AppTests(unittest.TestCase):
             (programs / "Uninstall Notepad++.lnk").write_text("x")
             with mock.patch.object(apps, "shortcut_folders", return_value=[programs]):
                 self.assertEqual(list(apps.start_menu_shortcuts()), ["Notepad++"])
+
+    def test_first_look_right_after_boot(self):
+        with mock.patch.dict(apps._cache, {"time": None, "apps": {}}), \
+                mock.patch.object(apps.time, "monotonic", return_value=5.0), \
+                mock.patch.object(apps, "start_menu_shortcuts", return_value={"Zoom": "z.lnk"}), \
+                mock.patch.object(apps, "start_menu", return_value={}):
+            self.assertEqual(REAL_INSTALLED(), {"Zoom": "z.lnk"})
 
     def test_tools_are_registered(self):
         for name in ("open_app", "list_apps", "save_nickname", "math_solve"):
