@@ -17,7 +17,12 @@ Default nam **Mira** (`.env` file e `AGENT_NAME` bodle nao).
    - [Gemini key](https://aistudio.google.com/apikey) (chat, math, chobi)
    - [Groq key](https://console.groq.com/keys) (voice input, backup brain)
 5. `check.bat` chalao. Kon ongsho kaj korche ta `OK` ba `FAIL` dekhabe.
-6. `start.bat` chalao.
+6. Desktop er **Mira** icon e double click koro (ba `app.bat`). Nijer window e app khulbe.
+7. Ba shudhu bolo **"Hey Mira"**. Window khule shunte shuru korbe, tarpor kaj bolo.
+
+`setup.bat` nijei Desktop icon banay, Windows chalu holei "Hey Mira" shona chalu kore,
+ar wake word er chhoto model (~40 MB) download kore. Pore abar korte:
+`.venv\Scripts\python main.py --install`
 
 Offline backup ar private mode er jonno (optional):
 
@@ -26,7 +31,26 @@ winget install --id Ollama.Ollama
 ollama pull gemma4:e2b
 ```
 
-## Command
+## App
+
+| Button | Ki hoy |
+| --- | --- |
+| Boro mic | Kotha bolo. Chup korle nije thame. Abar chaple sathe sathe shesh |
+| Mira bolar shomoy mic | Thamiye tomar kotha shune |
+| একটানা কথা | Uttor er por nije abar shune (call er moto) |
+| থামাও / Esc | Sob thamao |
+| Chobi / Ctrl+V / drag | Chobi theke prosno ba math |
+| Screen | 3 second por screen dekhe uttor |
+| Tala (lock) | Private mode |
+| Ctrl+Space | Mic |
+
+Shutdown, restart, website kholar age window e **হ্যাঁ, করো** button chapte hoy.
+Voice diye eta approve kora jay na.
+
+"Hey Mira" bondho korte `.env` e `WAKE_WORD=off`, ar Windows start theke bad dite:
+`.venv\Scripts\python main.py --no-startup`
+
+## Terminal command (`start.bat`)
 
 | Command | Ki hoy |
 | --- | --- |
@@ -44,15 +68,22 @@ ollama pull gemma4:e2b
   (Gemini, Groq, ar voice er jonno Microsoft). Gemini free tier er data Google tader
   product unnoti te use korte pare.
 - `/private` mode e shudhu local Ollama cholbe: likhe chat, tool ar voice bondho.
+- "Hey Mira" shona pura offline (Vosk). Wake word er age kono audio PC theke baire jay na.
+  "Hey Mira" er porer kotha Groq e jay, jemon mic button e.
+- App shudhu ei PC theke khola jay (`127.0.0.1`), onno website ba network theke na.
 - `.env` (API key) ar `data/` folder (memory, note) git e jay na. Egulo kokhono upload koro na.
-- Shutdown, restart ar website link khulte keyboard e `yes` likhte hoy.
+- Shutdown, restart ar website link khulte terminal e `yes` likhte hoy, app e button chapte hoy.
 
 ## Code
 
 | File | Kaj |
 | --- | --- |
 | `main.py` | Chalu korar file |
-| `agent/cli.py` | Chat loop ar command |
+| `agent/web.py` | Window app er server (shudhu 127.0.0.1) |
+| `agent/static/index.html` | App er screen |
+| `agent/wake.py` | "Hey Mira" offline wake word |
+| `agent/shortcut.py` | Desktop icon ar Windows start |
+| `agent/cli.py` | Terminal chat loop ar command |
 | `agent/brain.py` | AI model, instruction, tool chalano |
 | `agent/tools.py` | PC control feature |
 | `agent/voice.py` | Female voice ar mic |
@@ -70,5 +101,6 @@ Test chalate: `.venv\Scripts\python -m unittest`
 
 - [x] Phase 1: chat, voice, PC control, chobi, note, reminder, private mode
 - [ ] Phase 2: nijer app list, `sympy` diye math jachai
-- [ ] Phase 3: window app (tray icon), wake word, offline voice input
+- [x] Phase 3a: window app, "Hey Mira" wake word, Windows start e chalu
+- [ ] Phase 3b: tray icon, offline voice input
 - [ ] Phase 4: PDF study helper, daily briefing, clipboard translate, file organizer
