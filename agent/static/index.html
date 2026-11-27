@@ -114,7 +114,7 @@ textarea:focus { outline: none; }
 <div class="banner">প্রাইভেট মোড: কথা শুধু এই পিসির Ollama তে যাবে। মাইক আর ভয়েস বন্ধ।</div>
 
 <main id="chat">
-  <div class="empty" id="empty"><b>হ্যালো!</b>মাইকে চাপ দিয়ে কথা বলো, অথবা নিচে লিখে পাঠাও।</div>
+  <div class="empty" id="empty"><b>হ্যালো!</b>মাইকে চাপ দিয়ে কথা বলো, অথবা নিচে লিখে পাঠাও।<br>যেমন: "WhatsApp খোলো", "x² − 5x + 6 = 0 সমাধান করো"</div>
   <div class="typing" id="typing">ভাবছি...</div>
 </main>
 
@@ -150,7 +150,8 @@ const STATUS = { idle: "তৈরি", listening: "শুনছি... বলা 
   thinking: "ভাবছি...", confirm: "তোমার অনুমতির অপেক্ষা", speaking: "বলছি..." };
 const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "ওয়েবসাইট", web_search: "সার্চ", volume: "ভলিউম",
   take_screenshot: "স্ক্রিনশট", find_file: "ফাইল খোঁজা", lock_pc: "পিসি লক", shutdown_pc: "শাটডাউন",
-  add_note: "নোট", read_notes: "নোট পড়া", remember: "মনে রাখা", set_reminder: "রিমাইন্ডার", calculate: "হিসাব" };
+  add_note: "নোট", read_notes: "নোট পড়া", remember: "মনে রাখা", set_reminder: "রিমাইন্ডার", calculate: "হিসাব",
+  math_solve: "অঙ্ক যাচাই", list_apps: "অ্যাপ খোঁজা", save_nickname: "অ্যাপের নাম সেভ" };
 let last = 0, view = null, picture = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
 
 async function api(path, body) {

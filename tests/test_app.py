@@ -3,11 +3,14 @@ import array
 import http.client
 import json
 import math
+import os
 import sys
+import tempfile
 import threading
 import time
 import types
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from agent import brain, config, tools, voice, wake, web
@@ -68,22 +71,60 @@ class RecordTests(unittest.TestCase):
         loud = tone(0.2, 20000)
         self.assertEqual(voice.boost(loud), loud)
 
-    def test_transcribe_uses_bangla_hint_and_drops_echo(self):
+    def fake_openai(self, gemini_text="আমার নাম কি", gemini_error=None):
         calls = []
 
         class Client:
-            def __init__(self, **_):
-                self.audio = types.SimpleNamespace(transcriptions=types.SimpleNamespace(create=self.create))
+            def __init__(self, **options):
+                self.url = options.get("base_url", "")
+                self.audio = types.SimpleNamespace(transcriptions=types.SimpleNamespace(create=self.whisper))
+                self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.gemini))
 
-            def create(self, **request):
-                calls.append(request)
+            def whisper(self, **request):
+                calls.append(("groq", request))
                 return types.SimpleNamespace(text=voice.HINTS["bn"])
 
-        with mock.patch.object(config, "GROQ_KEY", "test"), \
-                mock.patch.dict(sys.modules, {"openai": types.SimpleNamespace(OpenAI=Client)}):
-            self.assertEqual(voice.transcribe(b"wav", "bn"), "")
-        self.assertEqual(calls[0]["language"], "bn")
-        self.assertEqual(calls[0]["prompt"], voice.HINTS["bn"])
+            def gemini(self, **request):
+                calls.append(("gemini", request))
+                if gemini_error:
+                    raise gemini_error
+                message = types.SimpleNamespace(content=gemini_text)
+                return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+        return calls, types.SimpleNamespace(OpenAI=Client)
+
+    def transcribe(self, openai, gemini="g", groq="q", stt=None):
+        env = {"STT": stt} if stt else {}
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(config, "GEMINI_KEY", gemini), mock.patch.object(config, "GROQ_KEY", groq), \
+                mock.patch.object(config, "DATA", Path(folder)), \
+                mock.patch.object(voice, "LAST_RECORDING", Path(folder, "last.wav")), \
+                mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, {"openai": openai}), \
+                mock.patch("builtins.print"):
+            text = voice.transcribe(b"wav", "bn")
+            self.assertEqual(Path(folder, "last.wav").read_bytes(), b"wav")
+            return text
+
+    def test_gemini_writes_bangla_first(self):
+        calls, openai = self.fake_openai()
+        self.assertEqual(self.transcribe(openai), "আমার নাম কি")
+        self.assertEqual([c[0] for c in calls], ["gemini"])
+        parts = calls[0][1]["messages"][0]["content"]
+        self.assertEqual(parts[1]["input_audio"]["format"], "wav")
+        self.assertIn("Bangla", parts[0]["text"])
+
+    def test_whisper_is_backup_and_drops_hint_echo(self):
+        calls, openai = self.fake_openai(gemini_error=RuntimeError("quota"))
+        self.assertEqual(self.transcribe(openai), "")
+        self.assertEqual([c[0] for c in calls], ["gemini", "groq"])
+        self.assertEqual(calls[1][1]["language"], "bn")
+        self.assertEqual(calls[1][1]["prompt"], voice.HINTS["bn"])
+
+    def test_choose_whisper_or_no_gemini_key(self):
+        calls, openai = self.fake_openai()
+        self.transcribe(openai, stt="groq")
+        self.transcribe(openai, gemini="")
+        self.assertEqual([c[0] for c in calls], ["groq", "groq"])
 
 
 class WakeTests(unittest.TestCase):

@@ -6,3 +6,4 @@ sounddevice
 pyautogui
 pillow
 vosk
+sympy

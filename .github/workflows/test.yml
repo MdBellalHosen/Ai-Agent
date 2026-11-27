@@ -35,3 +35,8 @@ jobs:
         continue-on-error: true
         run: |
           .venv\Scripts\python -c "from agent import wake; wake.download(); import vosk, json; vosk.SetLogLevel(0); r = vosk.KaldiRecognizer(vosk.Model(str(wake.MODEL_DIR)), 16000, json.dumps(wake.GRAMMAR)); print('grammar loaded')"
+      - name: Apps from the Start menu and sympy math
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          .venv\Scripts\python -c "from agent import apps, tools; found = apps.installed(); print(len(found), 'apps'); assert found; print(apps.find('edge'), apps.find('notepad')); print(apps.open_app('powershell')); print(tools.math_solve('solve', 'x^2-5x+6=0')); print(tools.math_solve('integrate', 'x^2', lower='0', upper='3'))"

@@ -1,7 +1,7 @@
 """The keyboard and microphone chat loop."""
 import sys
 
-from . import config, voice
+from . import apps, config, voice
 from .brain import ask
 from .vision import image_url
 
@@ -25,6 +25,7 @@ def main():
             pass
     language = "bn"
     settings = voice.settings
+    apps.preload()
     print(f"{config.NAME} ready.{HELP}")
 
     while True:

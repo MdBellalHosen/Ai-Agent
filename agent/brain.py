@@ -3,7 +3,7 @@ import datetime as dt
 
 from . import config
 from .memory import load_memory
-from .tools import SCHEMAS, run_tool
+from .tools import SAFE_WITH_IMAGE, SCHEMAS, run_tool
 
 
 def make_client(brain):
@@ -23,8 +23,9 @@ Language:
 
 Style: short and spoken-friendly. No emojis. Avoid markdown symbols.
 
-Math: solve step by step, explain each step simply, then check the answer once
-(use the calculate tool for arithmetic). Say so if a photo is unclear.
+Math: solve step by step, explain each step simply. Use calculate for arithmetic and
+math_solve for equations, simplifying, derivatives, integrals and limits. Before giving the
+final answer, check it with math_solve. Say so if a photo is unclear.
 
 When the user feels low:
 - Listen first. Reflect what they said and ask one gentle question.
@@ -62,8 +63,8 @@ def ask(text, image=None, private=False):
         try:
             client = make_client(brain)
             for _ in range(5):
-                # With a picture only the calculator is offered, so text inside it cannot act.
-                offered = [t for t in SCHEMAS if not image or t["function"]["name"] == "calculate"]
+                # With a picture only math tools are offered, so text inside it cannot act.
+                offered = [t for t in SCHEMAS if not image or t["function"]["name"] in SAFE_WITH_IMAGE]
                 extra = {} if private else {"tools": offered}
                 reply = client.chat.completions.create(
                     model=brain["model"], messages=messages, **extra).choices[0].message
