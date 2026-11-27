@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import brain, config, tools, voice, wake
+from . import apps, brain, config, tools, voice, wake
 from .vision import image_url
 
 PAGE = Path(__file__).with_name("static") / "index.html"
@@ -443,6 +443,7 @@ def serve(open_window=True, port=None):
     app = server.app
     app.install()
     app.start_wake()
+    apps.preload()
     print(f"{config.NAME} cholche: {url}")
     print("Wake word:", "on (Hey Mira)" if app.wake else "off")
     if open_window:

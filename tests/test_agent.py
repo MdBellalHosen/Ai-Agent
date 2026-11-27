@@ -83,7 +83,7 @@ class ChatTests(unittest.TestCase):
         with mock.patch.dict(tools.FUNCTIONS, {"lock_pc": mock.Mock()}) as functions:
             self.ask(models, "look", image="data:x")
             functions["lock_pc"].assert_not_called()
-        self.assertEqual([t["function"]["name"] for t in models.requests[0]["tools"]], ["calculate"])
+        self.assertEqual([t["function"]["name"] for t in models.requests[0]["tools"]], ["calculate", "math_solve"])
 
     def test_private_chat_stays_local(self):
         models = FakeModels(reply("ok"), reply("hello"))
@@ -115,12 +115,6 @@ class ToolTests(unittest.TestCase):
             self.assertEqual(tools.open_website("example.com"), "User did not allow it")
         system.assert_not_called()
         browser.assert_not_called()
-
-    def test_only_listed_apps_open(self):
-        with mock.patch("os.startfile", create=True) as start:
-            self.assertIn("Not in the allowed list", tools.open_app("powershell"))
-            tools.open_app("Notepad")
-        start.assert_called_once_with("notepad.exe")
 
     def test_find_file(self):
         with tempfile.TemporaryDirectory() as home:

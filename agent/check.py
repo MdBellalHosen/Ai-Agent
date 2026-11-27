@@ -7,7 +7,7 @@ import tempfile
 
 from . import config, voice
 
-PACKAGES = ("openai", "dotenv", "edge_tts", "pygame", "sounddevice", "pyautogui", "PIL", "vosk")
+PACKAGES = ("openai", "dotenv", "edge_tts", "pygame", "sounddevice", "pyautogui", "PIL", "vosk", "sympy")
 
 
 def report(name, action, required=True):
@@ -56,6 +56,21 @@ def wake_word():
     vosk.Model(str(wake.MODEL_DIR))
 
 
+def app_list():
+    from . import apps
+    found = apps.installed(refresh=True)
+    if not found:
+        raise RuntimeError("Start menu theke app pawa jayni")
+    return f"({len(found)} ta app)"
+
+
+def math_check():
+    from .tools import math_solve
+    answer = math_solve("solve", "x^2-5x+6=0")
+    if "x = 2" not in answer or "x = 3" not in answer:
+        raise RuntimeError(answer)
+
+
 def run(offline=False):
     version = sys.version.split()[0]
     print(f"Python {version}")
@@ -76,5 +91,7 @@ def run(offline=False):
     for name, text in ((config.VOICE_BN, "আমি প্রস্তুত।"), (config.VOICE_EN, "I am ready.")):
         report(f"voice {name}", lambda n=name, t=text: synthesize(n, t), required=False)
     report("wake word (Hey Mira)", wake_word, required=False)
+    report("app list", app_list, required=False)
+    report("math (sympy)", math_check, required=False)
     print("\nSob thik." if ok else "\nUporer FAIL gulo thik koro.")
     return 0 if ok else 1

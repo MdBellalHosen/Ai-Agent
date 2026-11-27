@@ -7,12 +7,14 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
+import sys
 import threading
 import urllib.parse
 import webbrowser
 from pathlib import Path
 
-from . import voice
+from . import apps, voice
 from .calculator import calculate
 from .memory import add_note, read_notes, remember
 
@@ -34,15 +36,23 @@ def reminders_pending():
     return bool(reminders)
 
 
-def open_app(app):
-    apps = {"notepad": "notepad.exe", "calculator": "calc.exe", "paint": "mspaint.exe",
-            "explorer": "explorer.exe", "chrome": "chrome.exe", "edge": "msedge.exe",
-            "settings": "ms-settings:", "task manager": "taskmgr.exe"}
-    key = app.strip().lower()
-    if key not in apps:
-        return f"Not in the allowed list: {', '.join(apps)}"
-    os.startfile(apps[key])
-    return f"Opened {key}"
+def math_solve(task, expression, variable="", lower="", upper="", point="", order=1):
+    """Exact math with sympy, in its own process so it can be stopped after 20 seconds."""
+    request = {"task": task, "expression": expression, "variable": variable,
+               "lower": lower, "upper": upper, "point": point, "order": order}
+    script = Path(__file__).with_name("mathsolve.py")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    try:
+        done = subprocess.run([sys.executable, "-I", str(script)], input=json.dumps(request),
+                              capture_output=True, text=True, encoding="utf-8", timeout=20,
+                              creationflags=flags)
+    except subprocess.TimeoutExpired:
+        return "Math took too long. Try a simpler form or solve step by step."
+    try:
+        answer = json.loads(done.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return f"Math problem: {(done.stderr or 'no answer')[-300:]}"
+    return answer.get("result") or f"Math problem: {answer.get('error')}"
 
 
 def open_website(url):
@@ -143,7 +153,11 @@ def tool(func, description, required=(), **props):
 S = {"type": "string"}
 N = {"type": "number"}
 TOOL_LIST = [
-    tool(open_app, "Open an app: notepad, calculator, paint, explorer, chrome, edge, settings, task manager", ["app"], app=S),
+    tool(apps.open_app, "Open any app installed on this PC by name, e.g. WhatsApp, VS Code, Spotify, Word, "
+         "notepad, calculator. Use the English app name, or a nickname the user saved", ["app"], app=S),
+    tool(apps.list_apps, "List apps installed on this PC, optionally only names containing search", search=S),
+    tool(apps.save_nickname, "Save a short name the user wants to use for an app, only when the user asks",
+         ["nickname", "app"], nickname=S, app=S),
     tool(open_website, "Open a website", ["url"], url=S),
     tool(web_search, "Search Google or YouTube in the browser", ["query"], query=S,
          site={"type": "string", "enum": ["google", "youtube"]}),
@@ -157,7 +171,17 @@ TOOL_LIST = [
     tool(remember, "Remember a fact only when the user asks you to", ["fact"], fact=S),
     tool(set_reminder, "Remind the user after N minutes", ["minutes", "message"], minutes=N, message=S),
     tool(calculate, "Calculate a math expression, e.g. sqrt(2)*5+3^2. Trig uses radians", ["expression"], expression=S),
+    tool(math_solve, "Exact algebra and calculus with sympy. Use it to solve and to check answers. "
+         "solve: equations like 'x^2-5x+6=0', a system 'x+y=5; x-y=1'. diff: derivative (order). "
+         "integrate: give lower and upper for a definite integral. limit: point like '0' or 'oo'. "
+         "Also simplify, factor, expand, evaluate. Use * or plain juxtaposition like 2x, ^ for powers",
+         ["task", "expression"],
+         task={"type": "string", "enum": ["solve", "simplify", "factor", "expand", "diff",
+                                          "integrate", "limit", "evaluate"]},
+         expression=S, variable=S, lower=S, upper=S, point=S, order=N),
 ]
+# Pure math tools: allowed even when a picture is attached, they cannot touch the PC.
+SAFE_WITH_IMAGE = {"calculate", "math_solve"}
 FUNCTIONS = {name: func for name, func, _ in TOOL_LIST}
 SCHEMAS = [schema for _, _, schema in TOOL_LIST]
 
