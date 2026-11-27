@@ -76,7 +76,7 @@ class App:
                 "name": config.NAME, "private": self.private, "muted": voice.settings["muted"],
                 "language": self.language, "convo": self.convo, "notice": self.notice,
                 "question": self.question if self.state == "confirm" else None, "ask": self.ask_id,
-                "mic": bool(config.GROQ_KEY), "wake": self.wake.status if self.wake else "off",
+                "mic": voice.can_listen(), "wake": self.wake.status if self.wake else "off",
                 "messages": [m for m in self.messages if m["id"] > after and m["private"] == self.private],
             }
 
@@ -124,8 +124,8 @@ class App:
             if self.private:
                 self.tell("প্রাইভেট মোডে মাইক বন্ধ। লিখে বলো।")
                 return
-            if not config.GROQ_KEY:
-                self.tell("মাইকের জন্য .env এ GROQ_API_KEY লাগবে।")
+            if not voice.can_listen():
+                self.tell("মাইকের জন্য .env এ GEMINI_API_KEY বা GROQ_API_KEY লাগবে।")
                 return
             self.set_state("listening")
             self.finish.clear()
@@ -222,7 +222,7 @@ class App:
             voice.speak(message)
 
     def heard_wake(self):
-        if self.private or not config.GROQ_KEY:
+        if self.private or not voice.can_listen():
             voice.chime()
             self.tell("Hey Mira শুনেছি, কিন্তু মাইক এখন বন্ধ। লিখে বলো।")
         elif not self.start("listening", self.wake_turn):  # also pauses the wake word

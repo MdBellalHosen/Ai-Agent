@@ -14,8 +14,8 @@ Default nam **Mira** (`.env` file e `AGENT_NAME` bodle nao).
 2. Ei repo download koro: sobuj **Code** button > **Download ZIP**, tarpor unzip.
 3. `setup.bat` double click koro. Eta library install kore `.env` file khulbe.
 4. Free API key nao ar `.env` e boshao:
-   - [Gemini key](https://aistudio.google.com/apikey) (chat, math, chobi)
-   - [Groq key](https://console.groq.com/keys) (voice input, backup brain)
+   - [Gemini key](https://aistudio.google.com/apikey) (chat, math, chobi, Bangla voice input)
+   - [Groq key](https://console.groq.com/keys) (backup voice input, backup brain)
 5. `check.bat` chalao. Kon ongsho kaj korche ta `OK` ba `FAIL` dekhabe.
 6. Desktop er **Mira** icon e double click koro (ba `app.bat`). Nijer window e app khulbe.
 7. Ba shudhu bolo **"Hey Mira"**. Window khule shunte shuru korbe, tarpor kaj bolo.
@@ -46,6 +46,10 @@ ollama pull gemma4:e2b
 
 Shutdown, restart, website kholar age window e **হ্যাঁ, করো** button chapte hoy.
 Voice diye eta approve kora jay na.
+
+Mic er kotha Gemini lekhe (Bangla e Whisper er cheye bhalo), Gemini na parle Groq Whisper.
+Ulto korte `.env` e `STT=groq`. Sorboshesh recording `data\last_voice.wav` e thake (shudhu ei PC te),
+kotha vul lekha hole sheta shune dekho mic er awaj porishkar kina.
 
 "Hey Mira" bondho korte `.env` e `WAKE_WORD=off`, ar Windows start theke bad dite:
 `.venv\Scripts\python main.py --no-startup`

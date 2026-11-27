@@ -171,9 +171,38 @@ def record(finish=None, cancel=None, on_level=None, wait=7.0, limit=30.0, silenc
     return (b"".join(chunks) if heard else b""), loudest
 
 
-def transcribe(wav, language="bn"):
-    if not config.GROQ_KEY:
-        raise RuntimeError("Voice input er jonno .env e GROQ_API_KEY dao.")
+LANGUAGE_NAMES = {"bn": "Bangla", "en": "English"}
+LAST_RECORDING = config.DATA / "last_voice.wav"
+
+
+def can_listen():
+    return bool(config.GEMINI_KEY or config.GROQ_KEY)
+
+
+def gemini_transcribe(wav, language):
+    """Gemini understands spoken Bangla much better than Whisper."""
+    import base64
+    from openai import OpenAI
+    expected = LANGUAGE_NAMES.get(language, "Bangla or English")
+    instruction = (
+        "Write down exactly what the speaker says in this recording. "
+        f"The speaker is from Bangladesh and usually speaks {expected}, sometimes mixing in English words. "
+        "Write Bangla words in Bangla script and English words in English letters. "
+        "Do not translate, answer, explain or add anything. "
+        "If there is no clear speech, reply with nothing.")
+    client = OpenAI(api_key=config.GEMINI_KEY, timeout=60, max_retries=1,
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+    reply = client.chat.completions.create(
+        model=config.env("STT_MODEL", config.env("GEMINI_MODEL", "gemini-3.5-flash-lite")),
+        temperature=0,
+        messages=[{"role": "user", "content": [
+            {"type": "text", "text": instruction},
+            {"type": "input_audio", "input_audio": {
+                "data": base64.b64encode(wav).decode(), "format": "wav"}}]}])
+    return (reply.choices[0].message.content or "").strip().strip('"')
+
+
+def whisper_transcribe(wav, language):
     from openai import OpenAI
     client = OpenAI(api_key=config.GROQ_KEY, base_url=config.GROQ_URL, timeout=60, max_retries=1)
     extra = {}
@@ -187,10 +216,34 @@ def transcribe(wav, language="bn"):
     return "" if text == HINTS.get(language) else text  # silence sometimes echoes the hint
 
 
+def transcribe(wav, language="bn"):
+    """Speech to text. Gemini first, Whisper (Groq) as backup. .env STT=groq swaps the order."""
+    if not can_listen():
+        raise RuntimeError("Mic er jonno .env e GEMINI_API_KEY ba GROQ_API_KEY dao.")
+    try:  # keep only the latest recording, on this PC, to check the mic if words come out wrong
+        config.DATA.mkdir(exist_ok=True)
+        LAST_RECORDING.write_bytes(wav)
+    except OSError:
+        pass
+    order = [("gemini", config.GEMINI_KEY, gemini_transcribe), ("groq", config.GROQ_KEY, whisper_transcribe)]
+    if config.env("STT", "gemini").lower() == "groq":
+        order.reverse()
+    problem = None
+    for name, key, engine in order:
+        if not key:
+            continue
+        try:
+            return engine(wav, language)
+        except Exception as err:
+            print(f"  [{name} speech problem] {err}")
+            problem = err
+    raise RuntimeError(f"Kotha lekha gelo na: {problem}")
+
+
 def listen(language):
     """Terminal version: speak, then press Enter."""
-    if not config.GROQ_KEY:
-        print("Voice input er jonno .env e GROQ_API_KEY dao.")
+    if not can_listen():
+        print("Voice input er jonno .env e GEMINI_API_KEY ba GROQ_API_KEY dao.")
         return ""
     import sounddevice as sd
     chunks = []
