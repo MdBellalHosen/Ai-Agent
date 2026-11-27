@@ -12,7 +12,8 @@ TASKS = ("solve", "simplify", "factor", "expand", "diff", "integrate", "limit", 
 FUNCTIONS = ("sin", "cos", "tan", "cot", "sec", "csc", "asin", "acos", "atan", "acot",
              "sinh", "cosh", "tanh", "sqrt", "cbrt", "root", "log", "exp", "Abs",
              "factorial", "floor", "ceiling", "gcd", "lcm", "binomial", "Max", "Min",
-             "pi", "E", "I", "oo", "Symbol", "Integer", "Float", "Rational", "Function")
+             "pi", "E", "I", "oo", "Symbol", "Integer", "Float", "Rational", "Function",
+             "Add", "Mul", "Pow", "Eq")
 ALLOWED = re.compile(r"^[A-Za-z0-9_+\-*/^().,=;! \t]*$")
 MAX_POWER = 10000
 MAX_FACTORIAL = 2000
@@ -63,7 +64,7 @@ def parse(text, field="expression"):
 def approx(value):
     import sympy
     try:
-        if value.is_number and value.is_finite:
+        if value.is_number and value.is_finite and not value.is_Integer and not value.is_Float:
             number = sympy.N(value, 10)
             if number != value:
                 return f" (≈ {number})"
