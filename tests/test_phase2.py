@@ -10,11 +10,11 @@ from unittest import mock
 
 from agent import apps, config, mathsolve, tools
 
-START_MENU = {"WhatsApp": "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App",
-              "Visual Studio Code": "Microsoft.VisualStudioCode",
-              "Spotify": "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",
-              "Word": "Microsoft.Office.WINWORD.EXE.15",
-              "Microsoft Teams": "MSTeams_8wekyb3d8bbwe!MSTeams"}
+START_MENU = {"WhatsApp": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App",
+              "Visual Studio Code": "C:\\ProgramData\\Start Menu\\Visual Studio Code.lnk",
+              "Spotify": "shell:AppsFolder\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",
+              "Word": "shell:AppsFolder\\Microsoft.Office.WINWORD.EXE.15",
+              "Microsoft Teams": "shell:AppsFolder\\MSTeams_8wekyb3d8bbwe!MSTeams"}
 HAS_SYMPY = importlib.util.find_spec("sympy") is not None
 
 
@@ -40,7 +40,7 @@ class AppTests(unittest.TestCase):
 
     def test_opens_store_apps_through_the_start_menu(self):
         self.assertEqual(apps.open_app("WhatsApp"), "Opened WhatsApp")
-        apps.launch.assert_called_once_with("shell:AppsFolder\\" + START_MENU["WhatsApp"])
+        apps.launch.assert_called_once_with(START_MENU["WhatsApp"])
 
     def test_risky_apps_are_refused(self):
         for name in ("powershell", "Command Prompt", "Uninstall Spotify", "Registry Editor", "cmd"):
@@ -69,6 +69,15 @@ class AppTests(unittest.TestCase):
         with mock.patch.object(apps.os, "name", "nt"), \
                 mock.patch.object(apps.subprocess, "run", return_value=done):
             self.assertEqual(apps.start_menu(), {"WhatsApp": "wa!App"})
+
+    def test_start_menu_shortcut_folders(self):
+        with tempfile.TemporaryDirectory() as folder:
+            programs = Path(folder, "Programs")
+            (programs / "Tools").mkdir(parents=True)
+            (programs / "Tools" / "Notepad++.lnk").write_text("x")
+            (programs / "Uninstall Notepad++.lnk").write_text("x")
+            with mock.patch.object(apps, "shortcut_folders", return_value=[programs]):
+                self.assertEqual(list(apps.start_menu_shortcuts()), ["Notepad++"])
 
     def test_tools_are_registered(self):
         for name in ("open_app", "list_apps", "save_nickname", "math_solve"):

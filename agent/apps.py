@@ -6,6 +6,7 @@ import re
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 from . import config
 
@@ -52,13 +53,36 @@ def start_menu():
             if i.get("Name") and i.get("AppID") and not blocked(i["Name"])}
 
 
+def shortcut_folders():
+    roots = [os.environ.get("ProgramData"), os.environ.get("APPDATA")]
+    return [Path(r, "Microsoft", "Windows", "Start Menu", "Programs") for r in roots if r]
+
+
+def start_menu_shortcuts():
+    """Backup list: the .lnk files in the Start Menu folders (desktop apps only)."""
+    found = {}
+    for folder in shortcut_folders():
+        if folder.is_dir():
+            for link in folder.rglob("*.lnk"):
+                if not blocked(link.stem):
+                    found.setdefault(link.stem.strip(), str(link))
+    return found
+
+
 def installed(refresh=False):
+    """{name: target}. Store apps come as shell:AppsFolder targets, others as .lnk paths."""
     with _lock:
         if refresh or time.monotonic() - _cache["time"] > REFRESH:
+            found = {}
             try:
-                _cache["apps"] = start_menu()
+                found = start_menu_shortcuts()
             except Exception as err:
                 print(f"  [app list problem] {err}")
+            try:
+                found.update({n: "shell:AppsFolder\\" + a for n, a in start_menu().items()})
+            except Exception as err:
+                print(f"  [app list problem] {err}")
+            _cache["apps"] = found
             _cache["time"] = time.monotonic()
         return _cache["apps"]
 
@@ -89,13 +113,13 @@ def find(name, follow=True):
     apps = installed()
     by_name = {normal(n): n for n in apps}
     if key in by_name:
-        return by_name[key], "shell:AppsFolder\\" + apps[by_name[key]]
+        return by_name[key], apps[by_name[key]]
     starts = [n for k, n in by_name.items() if k.startswith(key + " ") or k.startswith(key)]
     inside = [n for k, n in by_name.items() if re.search(rf"\b{re.escape(key)}\b", k)]
     for group in (starts, inside):
         if group:
             best = min(group, key=len)
-            return best, "shell:AppsFolder\\" + apps[best]
+            return best, apps[best]
     close = difflib.get_close_matches(key, list(by_name) + list(BUILT_IN), n=5, cutoff=0.6)
     if close and difflib.SequenceMatcher(None, key, close[0]).ratio() >= 0.8:
         return find(close[0], follow=False)
