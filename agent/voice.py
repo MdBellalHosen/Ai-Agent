@@ -122,8 +122,11 @@ def play_windows(audio, kind="mp3"):
             with os.fdopen(fd, "wb") as f:
                 f.write(audio)
             kind_name = "mpegvideo" if kind == "mp3" else "waveaudio"
-            if mci(f'open "{path}" type {kind_name} alias mira', None, 0, None):
-                raise RuntimeError("Windows could not open the sound")
+            code = mci(f'open "{path}" type {kind_name} alias mira', None, 0, None)
+            if code:
+                reason = ctypes.create_unicode_buffer(256)
+                ctypes.windll.winmm.mciGetErrorStringW(code, reason, 256)
+                raise RuntimeError(f"Windows could not open the sound: {reason.value or code}")
             mci("play mira", None, 0, None)
             status = ctypes.create_unicode_buffer(32)
             while not stop_flag.is_set():
