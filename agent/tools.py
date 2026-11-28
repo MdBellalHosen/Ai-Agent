@@ -14,7 +14,7 @@ import urllib.parse
 import webbrowser
 from pathlib import Path
 
-from . import apps, daily, files, google, info, study, voice
+from . import apps, control, daily, files, google, info, study, voice
 from .calculator import calculate
 from .memory import add_note, read_notes, remember
 
@@ -213,6 +213,34 @@ TOOL_LIST += [
     tool(study.log_mood, "Save today's mood (1 very bad to 5 very good) in the private diary, only if the user "
          "wants it saved", ["score"], score=N, note=S),
     tool(study.mood_summary, "Summary of the mood diary for the last N days", days=N),
+]
+WINDOW_ACTIONS = ["minimize", "maximize", "close", "switch", "show_desktop", "snap_left", "snap_right",
+                  "task_view", "new_tab", "close_tab", "next_tab", "zoom_in", "zoom_out", "refresh", "fullscreen"]
+TOOL_LIST += [
+    # PC control
+    tool(control.press_keys, "Press a key or shortcut in the window in front, e.g. 'ctrl+s', 'alt+tab', 'enter', "
+         "'ctrl+shift+t', 'f5'", ["keys"], keys=S),
+    tool(control.type_text, "Type text into the window in front (Bangla works). press_enter to send/submit",
+         ["text"], text=S, press_enter=B),
+    tool(control.window, "Window or browser tab action", ["action"],
+         action={"type": "string", "enum": WINDOW_ACTIONS}),
+    tool(control.media, "Music or video: play_pause, next, previous, stop", ["action"],
+         action={"type": "string", "enum": ["play_pause", "next", "previous", "stop"]}),
+    tool(control.scroll, "Scroll the window in front", direction={"type": "string", "enum": ["up", "down"]},
+         amount=N),
+    tool(control.close_app, "Close a running app by name, e.g. chrome, word, spotify. Asks the user first",
+         ["app"], app=S),
+    tool(control.system_status, "Battery, memory and disk space"),
+    tool(control.brightness, "Set screen brightness 0-100", ["level"], level=N),
+    tool(control.open_folder, "Open a folder: This PC, Desktop, Documents, Downloads, Pictures, Music, Videos",
+         ["name"], name=S),
+    tool(control.sleep_pc, "Put the PC to sleep. Asks the user first"),
+    # WhatsApp
+    tool(control.whatsapp_message, "Send a WhatsApp message to a saved contact name or a phone number. "
+         "Asks the user first", ["to", "message"], to=S, message=S),
+    tool(control.save_contact, "Save a contact's WhatsApp number, when the user gives it", ["name", "phone"],
+         name=S, phone=S),
+    tool(control.list_contacts, "List saved WhatsApp contacts"),
 ]
 FUNCTIONS = {name: func for name, func, _ in TOOL_LIST}
 SCHEMAS = [schema for _, _, schema in TOOL_LIST]

@@ -108,7 +108,7 @@ class AppVoiceTests(Base):
         self.assertEqual((user["text"], user["voice"]), ("সময় কত?", True))
         self.assertEqual(mira["text"], "দুপুর একটা।")
         self.assertIsNotNone(mira["took"])
-        self.speak.assert_called_once_with("দুপুর একটা।")
+        self.assertEqual(self.speak.call_args.args, ("দুপুর একটা।",))
 
     def test_falls_back_to_writing_first(self):
         with mock.patch.object(voice, "record", return_value=(tone(1, 3000), 3000)), \

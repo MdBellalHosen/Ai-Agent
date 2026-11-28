@@ -25,6 +25,7 @@ MAX_BODY = 20 * 1024 * 1024
 IDLE_LIMIT = 300  # seconds without a window before the server closes (when wake word is off)
 LANGUAGES = ("bn", "en", "")
 CHIME_DELAY = 0.35  # let the chime finish before recording
+BROWSER_PICKUP = 1.5  # seconds the window gets to start fetching a voice piece
 # Gemini hears the voice and answers in one step (faster, understands with context).
 DIRECT_VOICE = config.env("VOICE_MODE", "direct").lower() != "separate"
 
@@ -48,6 +49,15 @@ class App:
         self.wake = None
         self.tray = None
         self.direct_failures = 0
+        self.muted_told = False
+        self.wake_on = True  # the menu can pause "Hey Mira" for this session
+        self.page_visible = True
+        self.click_told = False
+        self.via_wake = False
+        # Mira's voice is played by the window itself (the browser's sound always works).
+        self.audio, self.audio_id = None, 0
+        self.audio_taken, self.audio_done = threading.Event(), threading.Event()
+        self.audio_result = {}
 
     # ---------- shared state ----------
     @property
@@ -81,6 +91,7 @@ class App:
                 "language": self.language, "convo": self.convo, "notice": self.notice,
                 "question": self.question if self.state == "confirm" else None, "ask": self.ask_id,
                 "mic": voice.can_listen(), "wake": self.wake.status if self.wake else "off",
+                "wake_on": self.wake_on, "play": {"id": self.audio["id"]} if self.audio else None,
                 "messages": [m for m in self.messages if m["id"] > after and m["private"] == self.private],
             }
 
@@ -165,10 +176,15 @@ class App:
             if not text:
                 self.tell("কথা বুঝতে পারিনি, আবার বলো।")
                 return
-            self.add("user", text, voice=True)
+            self.add("user", text, voice=True, wake=self.took_wake())
             self.reply(text, spoken=True, started=started)
             if not (self.convo or self.listen_next):
                 return
+
+    def took_wake(self):
+        """True once for the first thing heard after "Hey Mira"."""
+        was, self.via_wake = self.via_wake, False
+        return was
 
     def on_level(self, level):
         self.level = level
@@ -179,7 +195,7 @@ class App:
         self.used_tools = []
         voice.keep(wav)
         heard, answer = brain.ask_voice(wav, self.language)
-        self.add("user", heard or "(বুঝতে পারিনি)", voice=True)
+        self.add("user", heard or "(বুঝতে পারিনি)", voice=True, wake=self.took_wake())
         self.say(answer, started)
 
     def reply(self, text, picture=None, spoken=False, started=None):
@@ -193,10 +209,48 @@ class App:
         if took is not None:
             print(f"  [time] answer ready {took}s after you stopped talking")
         self.add("mira", answer, tools=list(self.used_tools), took=took)
+        if voice.settings["muted"] and started and not self.muted_told:
+            self.muted_told = True  # once per session
+            self.tell("মিরার ভয়েস বন্ধ আছে। শুনতে চাইলে উপরের স্পিকার বাটনে চাপ দাও।")
         if self.cancel.is_set() or voice.settings["muted"] or self.private:
             return
         self.set_state("speaking")
-        voice.speak(answer)
+        voice.speak(answer, player=self.browser_play)
+
+    def browser_play(self, audio):
+        """Plays one piece in the window. False means the window could not, so Python plays it."""
+        if not (self.page_open() and self.page_visible):  # minimized windows play late
+            return False
+        with self.lock:
+            self.audio_id += 1
+            self.audio = {"id": self.audio_id, "data": audio}
+            self.audio_taken.clear()
+            self.audio_done.clear()
+            self.audio_result = {}
+        try:
+            if not self.audio_taken.wait(BROWSER_PICKUP):  # window asleep or closed
+                return False
+            limit = time.monotonic() + 10 + len(audio) / 2500
+            while not self.audio_done.wait(0.05):
+                if voice.stop_flag.is_set() or time.monotonic() > limit:
+                    return True
+            return bool(self.audio_result.get("started"))
+        finally:
+            with self.lock:
+                self.audio = None  # the window stops playing when this disappears
+
+    def audio_finished(self, data):
+        with self.lock:
+            if not self.audio or data.get("id") != self.audio["id"]:
+                return False
+            self.audio_result = {"started": data.get("started") is True, "error": str(data.get("error") or "")[:200]}
+            if self.audio_result["error"]:
+                print(f"  [window sound] {self.audio_result['error']}, playing from Python instead")
+                if "NotAllowed" in self.audio_result["error"] and not self.click_told:
+                    self.click_told = True
+                    self.tell("মিরার ভয়েস জানালা থেকে বাজাতে একবার জানালার যেকোনো জায়গায় ক্লিক করো।")
+            self.audio_done.set()
+            return True
 
     # ---------- buttons ----------
     def mic(self):
@@ -256,7 +310,7 @@ class App:
         if not self.page_open() and self.url:
             launch(self.url)
         if not self.busy():
-            voice.speak(message)
+            voice.speak(message, player=self.browser_play)
 
     def heard_wake(self):
         if not voice.can_listen():
@@ -268,16 +322,28 @@ class App:
             launch(self.url)
 
     def wake_turn(self):
+        self.via_wake = True
         voice.chime()
         time.sleep(CHIME_DELAY)
         self.voice_loop()
 
     def install(self):
         tools.hooks.update(confirm=self.confirm, announce=self.announce, tool=self.tool_used)
+        voice.problems["report"] = self.tell
+
+    def voice_test(self):
+        if voice.settings["muted"]:
+            self.tell("মিরার ভয়েস বন্ধ আছে। উপরের স্পিকার বাটনে চাপ দিয়ে চালু করো।")
+            return
+        if self.private:
+            self.tell("প্রাইভেট মোডে মিরা ভয়েসে কথা বলে না।")
+            return
+        self.set_state("speaking")
+        voice.speak("হ্যালো! আমি মিরা। আমার কথা শুনতে পাচ্ছ?", player=self.browser_play)
 
     def start_wake(self):
         if wake.enabled() and wake.installed():
-            self.wake = wake.Listener(self.heard_wake, paused=self.busy)
+            self.wake = wake.Listener(self.heard_wake, paused=lambda: self.busy() or not self.wake_on)
             self.wake.start()
 
 
@@ -338,7 +404,7 @@ class Handler(BaseHTTPRequestHandler):
             page = PAGE.read_text(encoding="utf-8").replace("__TOKEN__", self.app.token)
             page = page.replace("__NONCE__", nonce)
             policy = (f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; "
-                      "img-src data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
+                      "img-src data: blob:; media-src blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
                       "frame-ancestors 'none'")
             return self.reply(200, page.encode(), "text/html; charset=utf-8",
                               [("Content-Security-Policy", policy)])
@@ -346,8 +412,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.checked(need_token=False) and self.reply(200, {"app": "mira"})
         if not self.checked():
             return
+        if url.path == "/api/audio":
+            wanted = parse_qs(url.query).get("id", [""])[0]
+            with self.app.lock:
+                audio = self.app.audio
+                if not audio or str(audio["id"]) != wanted:
+                    return self.reply(404, {"error": "gone"})
+                self.app.audio_taken.set()
+            return self.reply(200, audio["data"], "audio/mpeg")
         if url.path == "/api/updates":
-            after = parse_qs(url.query).get("after", ["0"])[0]
+            query = parse_qs(url.query)
+            after = query.get("after", ["0"])[0]
+            self.app.page_visible = query.get("v", ["1"])[0] != "0"
             return self.reply(200, self.app.snapshot(int(after) if after.isdigit() else 0))
         self.reply(404, {"error": "not found"})
 
@@ -392,6 +468,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200 if ok else 409, {"ok": ok})
         if path == "/api/mic":
             return self.reply(200, {"ok": bool(app.mic())})
+        if path == "/api/audio/done":
+            return self.reply(200, {"ok": app.audio_finished(data)})
+        if path == "/api/voicetest":
+            return self.reply(200 if app.start("speaking", app.voice_test) else 409, {"ok": True})
         if path == "/api/stop":
             app.stop()
             return self.reply(200, {"ok": True})
@@ -408,6 +488,8 @@ class Handler(BaseHTTPRequestHandler):
                     voice.stop_speaking()
             if "convo" in data:
                 app.convo = bool(data["convo"])
+            if "wake" in data:
+                app.wake_on = bool(data["wake"])
             if data.get("language") in LANGUAGES:
                 app.language = data["language"]
             return self.reply(200, app.snapshot(10 ** 9))
@@ -457,7 +539,8 @@ def launch(url):
     """Open the page as its own app window (Edge or Chrome), else in the normal browser."""
     for exe in browsers():
         try:
-            subprocess.Popen([exe, f"--app={url}", "--window-size=520,820"])
+            subprocess.Popen([exe, f"--app={url}", "--window-size=520,820",
+                              "--autoplay-policy=no-user-gesture-required"])
             return
         except OSError:
             continue
@@ -491,6 +574,7 @@ def serve(open_window=True, port=None):
     app.install()
     app.start_wake()
     apps.preload()
+    threading.Thread(target=lambda: (brain.warm_up(), voice.warm_up()), daemon=True).start()
     app.tray = tray.start(app, server, launch)
     print(f"{config.NAME} cholche: {url}")
     print("Wake word:", "on (Hey Mira)" if app.wake else "off")

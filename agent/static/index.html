@@ -165,6 +165,8 @@ body.drop .compose { border-color: var(--marigold); border-style: dashed; }
 <div class="menu" id="menu">
   <button id="briefBtn">আজকের ব্রিফিং</button>
   <button id="cardsBtn">ফ্ল্যাশকার্ড দিয়ে কুইজ</button>
+  <button id="voiceTestBtn">মিরার ভয়েস পরীক্ষা</button>
+  <button id="wakeBtn">"Hey Mira" বন্ধ করো</button>
   <hr>
   <button id="clearBtn">নতুন করে কথা শুরু</button>
   <button id="quitBtn">মিরা বন্ধ করো</button>
@@ -232,8 +234,74 @@ const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "�
   weather: "আবহাওয়া", news: "খবর", wikipedia: "উইকিপিডিয়া", unread_emails: "ইমেইল",
   search_emails: "ইমেইল খোঁজা", calendar_events: "ক্যালেন্ডার", add_flashcards: "ফ্ল্যাশকার্ড সেভ",
   next_flashcards: "ফ্ল্যাশকার্ড", grade_flashcard: "ফ্ল্যাশকার্ড", list_decks: "ফ্ল্যাশকার্ড",
-  log_mood: "মুড ডায়েরি", mood_summary: "মুড ডায়েরি" };
+  log_mood: "মুড ডায়েরি", mood_summary: "মুড ডায়েরি", press_keys: "কি-বোর্ড", type_text: "টাইপ করা",
+  window: "উইন্ডো", media: "গান/ভিডিও", scroll: "স্ক্রল", close_app: "অ্যাপ বন্ধ", system_status: "পিসির অবস্থা",
+  brightness: "ব্রাইটনেস", open_folder: "ফোল্ডার", sleep_pc: "স্লিপ", whatsapp_message: "WhatsApp",
+  save_contact: "নম্বর সেভ", list_contacts: "কন্টাক্ট" };
 let last = 0, view = null, picture = null, doc = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
+
+/* ---------- Mira's voice, played here in the window ---------- */
+const Sound = (() => {
+  let current = null, context = null, analyser = null, samples = null;
+
+  function unlock() {  // after any click the window may play sound and measure it
+    try {
+      context = context || new AudioContext();
+      if (context.state === "suspended") context.resume();
+    } catch (e) { context = null; }
+  }
+  ["pointerdown", "keydown"].forEach(e => document.addEventListener(e, unlock, { capture: true }));
+
+  function measure(el) {
+    if (!context || context.state !== "running") return;
+    try {
+      const source = context.createMediaElementSource(el);
+      analyser = context.createAnalyser(); analyser.fftSize = 512;
+      samples = new Uint8Array(analyser.fftSize);
+      source.connect(analyser); analyser.connect(context.destination);
+    } catch (e) { analyser = null; }
+  }
+
+  function level() {
+    if (!analyser || !current || !current.el || current.el.paused) return null;
+    analyser.getByteTimeDomainData(samples);
+    let sum = 0;
+    for (const v of samples) sum += (v - 128) * (v - 128);
+    return Math.min(1, Math.sqrt(sum / samples.length) / 40);
+  }
+
+  function finish(id, started, error) {
+    if (current && current.id === id) {
+      if (current.url) URL.revokeObjectURL(current.url);
+      current = null; analyser = null;
+    }
+    api("/api/audio/done", { id, started, error }).catch(() => {});
+  }
+
+  async function play(item) {
+    if (!item) { if (current && current.el) current.el.pause(); if (current) current = null; return; }
+    if (current && current.id === item.id) return;
+    if (current && current.el) current.el.pause();
+    const id = item.id;
+    current = { id };
+    let started = false;
+    try {
+      const res = await fetch("/api/audio?id=" + id, { headers: { "X-Token": TOKEN } });
+      if (!res.ok || !current || current.id !== id) return;
+      current.url = URL.createObjectURL(await res.blob());
+      const el = current.el = new Audio(current.url);
+      measure(el);
+      el.onplaying = () => { started = true; };
+      el.onended = () => finish(id, true, "");
+      el.onerror = () => finish(id, started, "could not play");
+      await el.play();
+      started = true;
+    } catch (e) {
+      finish(id, started, e.name || String(e));
+    }
+  }
+  return { play, level };
+})();
 
 /* ---------- the orb: soft colour blobs that breathe, listen, think and speak ---------- */
 const Orb = (() => {
@@ -288,7 +356,8 @@ const Orb = (() => {
     const ease = 1 - Math.pow(.02, dt);  // smooth, frame-rate independent
     for (const k of ["speed", "wobble", "spin", "size"]) mood[k] += (goal[k] - mood[k]) * ease;
     colors = colors.map((c, i) => c.map((v, j) => v + (target[i][j] - v) * ease));
-    const voice = state === "speaking" ? .28 + .22 * Math.abs(Math.sin(t * 6.3) * Math.sin(t * 2.1 + 1)) : 0;
+    const spoken = Sound.level();
+    const voice = state === "speaking" ? (spoken ?? .28 + .22 * Math.abs(Math.sin(t * 6.3) * Math.sin(t * 2.1 + 1))) : 0;
     level += ((state === "listening" ? heard : voice) - level) * Math.min(1, ease * 3);
     if (!still.matches) { t += dt * mood.speed; spin += dt * mood.spin; }
 
@@ -387,7 +456,7 @@ function addMessage(m) {
   div.className = "msg " + m.role + (m.reminder ? " reminder" : "");
   div.textContent = m.text;
   const tags = [];
-  if (m.voice) tags.push("মাইক থেকে");
+  if (m.voice) tags.push(m.wake ? "\"Hey Mira\" শুনে নিজে চালু" : "মাইক থেকে");
   if (m.image) tags.push(m.screen ? "স্ক্রিন সহ" : "ছবি সহ");
   if (m.document) tags.push("ফাইল: " + m.document);
   (m.tools || []).forEach(t => tags.push(TOOLS[t] || t));
@@ -411,9 +480,12 @@ function render(s) {
   document.body.dataset.state = s.state;
   document.body.classList.toggle("private", s.private);
   Orb.set(s.state, s.private, s.level);
+  Sound.play(s.play);
+  $("wakeBtn").textContent = s.wake_on ? "\"Hey Mira\" বন্ধ করো" : "\"Hey Mira\" চালু করো";
+  $("wakeBtn").style.display = s.wake === "off" ? "none" : "";
   $("name").textContent = s.name;
   document.title = s.name;
-  $("wakeNote").textContent = s.wake === "listening" ? "\"Hey Mira\" বললেই শুনবে" : "";
+  $("wakeNote").textContent = s.wake === "off" ? "" : s.wake_on ? "\"Hey Mira\" বললেই শুনবে" : "\"Hey Mira\" বন্ধ";
   $("status").textContent = STATUS[s.state] || s.state;
   $("subStatus").textContent = SUB[s.state] || (s.wake === "listening" ? "অথবা বলো \"Hey Mira\"" : "অথবা নিচে লেখো");
   $("micBtn").setAttribute("aria-label", s.state === "listening" ? "বলা শেষ" : "কথা বলো");
@@ -433,10 +505,10 @@ function render(s) {
 
 async function poll() {
   let again = false;
-  try { again = render(await api("/api/updates?after=" + last)); }
+  try { again = render(await api("/api/updates?after=" + last + "&v=" + (document.hidden ? 0 : 1))); }
   catch (e) { if (e.message !== "reload") { $("status").textContent = "মিরা বন্ধ আছে"; $("subStatus").textContent = "Desktop এর Mira আইকন থেকে আবার খোলো"; } }
   const state = document.body.dataset.state;
-  setTimeout(poll, again ? 0 : state === "listening" ? 120 : state === "idle" ? 700 : 250);
+  setTimeout(poll, again ? 0 : state === "listening" || state === "speaking" ? 100 : state === "idle" ? 700 : 250);
 }
 
 async function send(text) {
@@ -510,6 +582,8 @@ $("menuBtn").addEventListener("click", e => { e.stopPropagation(); $("menu").cla
 document.addEventListener("click", () => $("menu").classList.remove("show"));
 $("briefBtn").addEventListener("click", () => send("আজকের ব্রিফিং দাও।"));
 $("cardsBtn").addEventListener("click", () => send("আজকের ফ্ল্যাশকার্ড দিয়ে আমাকে কুইজ নাও।"));
+$("voiceTestBtn").addEventListener("click", () => api("/api/voicetest", {}));
+$("wakeBtn").addEventListener("click", () => api("/api/settings", { wake: $("wakeBtn").textContent.includes("চালু") }));
 $("clearBtn").addEventListener("click", async () => { const res = await api("/api/clear", {}); if (res.ok) clearChat(); });
 $("quitBtn").addEventListener("click", async () => { await api("/api/quit", {}); $("status").textContent = "মিরা বন্ধ হয়েছে"; $("subStatus").textContent = "জানালাটা বন্ধ করে দাও"; window.close(); });
 document.addEventListener("paste", e => { const item = [...e.clipboardData.items].find(i => i.type.startsWith("image/")); if (item) { e.preventDefault(); loadPicture(item.getAsFile()); } });

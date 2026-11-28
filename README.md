@@ -89,8 +89,24 @@ Voice diye eta approve kora jay na.
 | "আজকের আবহাওয়া কেমন?", "আজকের খেলার খবর", "সালোকসংশ্লেষণ কী?" | Weather, khobor, Wikipedia |
 | "আমার unread mail গুলো বলো", "কাল আমার কী কী আছে?" | Gmail ar Calendar (shudhu pora) |
 | "আজকের মুড ৩ লিখে রাখো", "এই সপ্তাহে আমার মুড কেমন ছিল?" | Mood diary, shudhu ei PC te |
+| "Anika কে WhatsApp এ লেখো আমি ১০ মিনিটে আসছি" | WhatsApp message (age onumoti chay) |
+| "Rafi র নম্বর 01712345678 সেভ করো" | WhatsApp contact save |
+| "ctrl s চাপো", "এটা টাইপ করো: ...", "উইন্ডো মিনিমাইজ করো", "নতুন ট্যাব খোলো" | Keyboard, typing, window, tab |
+| "গান থামাও", "পরের গান", "ব্রাইটনেস ৬০ করো", "Downloads ফোল্ডার খোলো" | Media, brightness, folder |
+| "Chrome বন্ধ করো", "ব্যাটারি কত?", "পিসি স্লিপে দাও" | App bondho (onumoti niye), battery/RAM/disk, sleep |
 
-Command Prompt, PowerShell, Registry, uninstall er moto app Mira khole na, nirapottar jonno.
+Command Prompt, PowerShell, Registry, uninstall er moto app Mira khole na. Command window samne thakle
+Mira tate type ba key chape na, ar Win+R ba Win+X chape na, jate keu bhul kore kono command chalate na pare.
+
+## WhatsApp
+
+1. Prothome nombor save koro: "Anika র নম্বর 01712345678 সেভ করো". Nombor shudhu `data\contacts.json` e thake.
+2. Tarpor bolo: "Anika কে WhatsApp এ লেখো আমি আসছি".
+3. Mira ke ke message pabe ar ki likha thakbe dekhabe. **হ্যাঁ, করো** chaple WhatsApp khule message likhe Enter chape.
+
+WhatsApp Desktop app install thakle Mira sheta use kore (taratari ar nirbhorjoggo). Na thakle web.whatsapp.com
+e notun tab khule. Onno tab e WhatsApp Web khola thakle WhatsApp "Use here" chaite pare, tokhon oita chap dao.
+Nije Enter chapte chaile `.env` e `WHATSAPP_AUTOSEND=off`.
 
 ## Settings (`.env`)
 
@@ -104,6 +120,8 @@ Command Prompt, PowerShell, Registry, uninstall er moto app Mira khole na, nirap
 | `WEB_PORT=8765` | App er port, onno program er sathe milte gele bodlao |
 | `TRAY=on` | Clock er pashe icon. `off` dile nai |
 | `CITY=Dhaka` | Weather er shohor |
+| `GEMINI_THINKING=low` | Gemini koto bhabbe. `low` taratari, `medium`/`high` kothin prosne bhalo |
+| `WHATSAPP=auto`, `WHATSAPP_AUTOSEND=on` | WhatsApp Desktop na web, ar nije Enter chapbe kina |
 | `OLLAMA_MODEL` | Private mode ar offline backup er model |
 
 Windows chalu hole Mira chalu howa bondho korte:
@@ -130,6 +148,27 @@ Mira shudhu mail ar calendar **pore**, kokhono pathay, muche, ba bodlay na.
 
 Token `data\google_token.json` e thake. Bondho korte file ta muche dao, ar
 [Google account permissions](https://myaccount.google.com/permissions) theke Mira ke remove koro.
+
+## Mira voice e kotha na bolle
+
+Mira r voice ekhon Mira r window nijei bajay (Edge/Chrome er sound), tai Windows e browser e sound
+bajle Mira o bajbe. Window lukano thakle ba browser na dile Python bajay.
+
+1. `⋮` > **মিরার ভয়েস পরীক্ষা** chapo. Kono somossa thakle niche holud lekhay karon dekhabe.
+2. "জানালায় একবার ক্লিক করো" lekha ashle window e jekono jaygay ekbar click koro.
+3. Upore speaker button e kata dag thakle voice bondho, chap dao.
+4. Private mode e Mira voice e bole na (tala button).
+5. Windows er volume ar kon speaker/headphone select kora ache dekho.
+6. Bangla voice er jonno internet lage. Na pele English uttor Windows er nijer voice e bole.
+
+"Hey Mira" nije nije chalu hole `⋮` > **"Hey Mira" বন্ধ করো**. "Hey Mira" shune chalu hole chat e
+**"Hey Mira" শুনে নিজে চালু** lekha thake.
+
+## Speed
+
+Uttor er niche "x সেকেন্ডে" dekhay. Mira chalu holei voice ar model er connection gorom kore rakhe,
+Gemini ke kom bhabte bole (`GEMINI_THINKING=low`), ar prothom bakko toiri holei bola shuru kore.
+Aro taratari chaile `.env` e `SILENCE_SECONDS=0.7`.
 
 ## Mic e kotha vul lekha hole
 
@@ -187,6 +226,7 @@ Purono terminal chat o ache:
 | `agent/google.py` | Gmail ar Calendar, shudhu pora |
 | `agent/study.py` | Flashcard ar mood diary |
 | `agent/daily.py` | Aajker briefing |
+| `agent/control.py` | Keyboard, typing, window, media, app bondho, brightness, WhatsApp |
 | `agent/voice.py` | Female voice, mic, Bangla speech-to-text |
 | `agent/vision.py` | Chobi ar screen |
 | `agent/memory.py` | Memory ar note |
