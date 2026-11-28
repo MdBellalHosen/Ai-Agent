@@ -106,6 +106,11 @@ body.talking .empty { display: none; }
 .msg.reminder::before { left: 14px; top: 18px; background: var(--amber); }
 .msg.error { align-self: center; color: var(--danger); font-size: 13px; }
 .msg .tag { display: block; margin-top: 4px; font-size: 12px; color: var(--faint); }
+.replay { display: flex; width: max-content; align-items: center; gap: 5px; margin: 4px 0 0 -4px; padding: 2px 8px 2px 4px;
+  border-radius: 999px; font-size: 12px; color: var(--faint); transition: color .15s, background .15s; }
+.replay svg { width: 15px; height: 15px; }
+.replay:hover { color: var(--marigold); background: var(--night-2); }
+body.private .replay { display: none; }
 .typing { align-self: flex-start; display: none; gap: 5px; padding: 8px 0 8px 16px; }
 .typing i { width: 7px; height: 7px; border-radius: 50%; animation: bob 1s ease-in-out infinite; }
 .typing i:nth-child(1) { background: var(--marigold); }
@@ -464,6 +469,12 @@ function addMessage(m) {
   (m.tools || []).forEach(t => tags.push(TOOLS[t] || t));
   if (m.took) tags.push(m.took + " সেকেন্ডে");
   if (tags.length) { const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = tags.join(", "); div.appendChild(tag); }
+  if (m.role === "mira") {
+    const again = document.createElement("button");
+    again.className = "replay"; again.dataset.id = m.id; again.title = "এই উত্তরটা আবার শোনো";
+    again.innerHTML = '<svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>আবার শোনো';
+    div.appendChild(again);
+  }
   $("chat").insertBefore(div, $("typing"));
   div.scrollIntoView({ block: "end", behavior: "smooth" });
 }
@@ -565,6 +576,7 @@ async function screen() {
 function answer(yes) { answeredAsk = pendingAsk; $("dialog").classList.remove("show"); api("/api/confirm", { ask: pendingAsk, yes }); }
 
 $("micBtn").addEventListener("click", () => api("/api/mic", {}));
+$("chat").addEventListener("click", e => { const b = e.target.closest(".replay"); if (b) api("/api/say", { id: Number(b.dataset.id) }); });
 $("stopBtn").addEventListener("click", () => api("/api/stop", {}));
 $("sendBtn").addEventListener("click", () => send());
 $("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });

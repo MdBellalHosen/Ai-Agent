@@ -158,14 +158,25 @@ class VoiceBackupTests(unittest.TestCase):
 
 
 class AppVoiceTests(Base):
-    def test_voice_test_and_muted_hint(self):
-        self.request("POST", "/api/voicetest", {})
-        self.wait_idle()
-        self.speak.assert_called_once()
+    def test_voice_test_reports_each_step(self):
+        played = []
+        with mock.patch.object(voice, "tts_bytes", return_value=b"mp3"), \
+                mock.patch.object(voice, "play_mp3", side_effect=played.append), \
+                mock.patch.object(web, "BROWSER_PICKUP", 0.1):
+            self.request("POST", "/api/voicetest", {})
+            self.wait_idle()
+        report = self.updates()["messages"][-1]["text"]
+        self.assertIn(web.VERSION, report)
+        self.assertIn("ভয়েস তৈরি (Microsoft): ঠিক আছে", report)
+        self.assertIn("জানালা থেকে বাজানো: হয়নি (window did not answer)", report)
+        self.assertIn("Python থেকে বাজানো: ঠিক আছে", report)
+        self.assertEqual(played, [b"mp3"])
+
+    def test_voice_test_when_muted(self):
         self.request("POST", "/api/settings", {"muted": True})
         self.request("POST", "/api/voicetest", {})
         self.wait_idle()
-        self.assertIn("ভয়েস বন্ধ", self.updates()["notice"]["text"])
+        self.assertIn("ভয়েস: বন্ধ", self.updates()["messages"][-1]["text"])
 
     def test_tools_registered(self):
         for name in ("press_keys", "type_text", "whatsapp_message", "save_contact", "close_app"):

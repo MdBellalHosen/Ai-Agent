@@ -88,6 +88,41 @@ class WindowVoiceTests(Base):
         self.assertFalse(self.app.took_wake())
 
 
+class SayAgainTests(Base):
+    def test_hear_an_answer_again(self):
+        with mock.patch.object(brain, "ask", return_value="প্রথম উত্তর।"):
+            self.request("POST", "/api/send", {"text": "হ্যালো"})
+            self.wait_idle()
+        mira = self.updates()["messages"][-1]
+        self.speak.reset_mock()
+        self.assertEqual(self.request("POST", "/api/say", {"id": mira["id"]})[0], 200)
+        self.wait_idle()
+        self.assertEqual(self.speak.call_args.args, ("প্রথম উত্তর।",))
+        self.assertEqual(self.request("POST", "/api/say", {"id": mira["id"] - 1})[0], 400)  # user's own message
+
+
+class FullTextTests(unittest.TestCase):
+    def test_long_answers_are_spoken_to_the_end(self):
+        text = "অনেক লম্বা উত্তর। " * 200 + "শেষ লাইন।"
+        self.assertTrue(" ".join(voice.sentences(text)).endswith("শেষ লাইন।"))
+
+    def test_a_failed_piece_is_tried_again(self):
+        played, tries = [], {"n": 0}
+
+        def flaky(piece):
+            tries["n"] += 1
+            if tries["n"] == 2:
+                raise OSError("network blip")
+            return piece.encode()
+
+        with mock.patch.dict(voice.settings, {"muted": False, "private": False}), \
+                mock.patch.object(voice, "tts_bytes", side_effect=flaky), \
+                mock.patch.object(voice, "play_mp3", side_effect=played.append), \
+                mock.patch.object(voice.time, "sleep"):
+            voice.speak("এক। " + "দুই নম্বর অংশটা বেশ লম্বা করে লেখা। " * 4 + "তিন।")
+        self.assertTrue(b" ".join(played).decode().endswith("তিন।"))
+
+
 class PromptTests(unittest.TestCase):
     def test_mira_knows_she_can_speak(self):
         self.assertIn("read aloud", brain.system_prompt())

@@ -72,3 +72,12 @@ jobs:
         run: |
           .venv\Scripts\python -c "from agent import screen, control; print(screen.list_windows()); print('screen', screen.grab().size); print(control.system_status())"
           .venv\Scripts\python -c "from pathlib import Path; from agent import control; f = Path.home() / 'Documents' / 'mira-test.txt'; f.parent.mkdir(exist_ok=True); f.write_text('x'); control.to_recycle_bin(f); print('recycle bin ok', not f.exists())"
+      - name: Replace an old running Mira
+        env:
+          PYTHONUTF8: "1"
+          WAKE_WORD: "off"
+          TRAY: "off"
+        run: |
+          Start-Process -FilePath .venv\Scripts\python.exe -ArgumentList "main.py","--background" -WindowStyle Hidden
+          Start-Sleep -Seconds 8
+          .venv\Scripts\python -c "from agent import web; print('before', web.running('http://127.0.0.1:8765/')); print('stopped', web.stop_old(8765)); print('after', web.running('http://127.0.0.1:8765/'))"
