@@ -151,11 +151,18 @@ Token `data\google_token.json` e thake. Bondho korte file ta muche dao, ar
 
 ## Mira voice e kotha na bolle
 
+Mira r voice ekhon Mira r window nijei bajay (Edge/Chrome er sound), tai Windows e browser e sound
+bajle Mira o bajbe. Window lukano thakle ba browser na dile Python bajay.
+
 1. `⋮` > **মিরার ভয়েস পরীক্ষা** chapo. Kono somossa thakle niche holud lekhay karon dekhabe.
-2. Upore speaker button e kata dag thakle voice bondho, chap dao.
-3. Private mode e Mira voice e bole na (tala button).
-4. Windows er volume ar kon speaker/headphone select kora ache dekho.
-5. Bangla voice er jonno internet lage. Na pele English uttor Windows er nijer voice e bole.
+2. "জানালায় একবার ক্লিক করো" lekha ashle window e jekono jaygay ekbar click koro.
+3. Upore speaker button e kata dag thakle voice bondho, chap dao.
+4. Private mode e Mira voice e bole na (tala button).
+5. Windows er volume ar kon speaker/headphone select kora ache dekho.
+6. Bangla voice er jonno internet lage. Na pele English uttor Windows er nijer voice e bole.
+
+"Hey Mira" nije nije chalu hole `⋮` > **"Hey Mira" বন্ধ করো**. "Hey Mira" shune chalu hole chat e
+**"Hey Mira" শুনে নিজে চালু** lekha thake.
 
 ## Speed
 

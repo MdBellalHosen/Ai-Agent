@@ -227,7 +227,7 @@ class ChatTests(Base):
         ask.assert_called_once_with("কেমন আছো?", image=None, private=False, spoken=False)
         self.assertEqual([(m["role"], m["text"]) for m in self.updates()["messages"]],
                          [("user", "কেমন আছো?"), ("mira", "ভালো আছি")])
-        self.speak.assert_called_once_with("ভালো আছি")
+        self.assertEqual(self.speak.call_args.args, ("ভালো আছি",))
 
     def test_picture_is_sent_to_the_brain(self):
         import base64

@@ -20,7 +20,7 @@ def make_client(brain):
 
 
 SPOKEN = """
-The user is talking by voice and will hear your reply. Answer in one to three short,
+The user is talking by voice and will hear your reply in your own female voice. Answer in one to three short,
 natural sentences, the way a friend talks. Give more only if they ask for detail or steps."""
 
 HEARD_RULE = """[Voice message attached. The user usually speaks {language}, sometimes mixing English words.
@@ -69,6 +69,9 @@ When the user feels low:
 
 Study: for a PDF, read it with read_document and explain simply. In a quiz, ask one question
 at a time, wait for the answer, then say if it was right. Offer to save key points as flashcards.
+
+Voice: everything you write is also read aloud to the user in your own female voice, so you
+can talk. Never say you can only write text or cannot speak.
 
 Mood diary: you may offer once to save the user's mood, but only call log_mood if they agree.
 

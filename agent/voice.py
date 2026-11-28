@@ -166,8 +166,9 @@ def warm_up():
         print(f"  [voice warm up] {err}")
 
 
-def speak(text):
-    """Plays piece by piece: the next piece is made while the current one plays."""
+def speak(text, player=None):
+    """Plays piece by piece: the next piece is made while the current one plays.
+    player(audio) may play a piece somewhere else (the app window); False means play it here."""
     if settings["muted"] or settings["private"]:  # private text never goes online
         return
     import queue
@@ -194,7 +195,8 @@ def speak(text):
             break
         if audio:
             try:
-                play_mp3(audio)
+                if not (player and player(audio)):
+                    play_mp3(audio)
             except Exception as err:
                 report(f"ভয়েস বাজাতে সমস্যা: {err}")
                 break
