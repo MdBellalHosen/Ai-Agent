@@ -4,142 +4,214 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mira</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%237c5cf6'/%3E%3Ctext x='32' y='43' font-size='32' text-anchor='middle' fill='white' font-family='Segoe UI' font-weight='700'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='30%25'%3E%3Cstop offset='0' stop-color='%23F4A73B'/%3E%3Cstop offset='.55' stop-color='%23E5577E'/%3E%3Cstop offset='1' stop-color='%232FB7A6'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='30' fill='url(%23g)'/%3E%3C/svg%3E">
 <style nonce="__NONCE__">
+/* Mira: dusk over a Bengal river. Ink-blue night, marigold, jamdani rose, river teal. */
 :root {
-  --bg: #14121f; --panel: #1d1a2c; --panel2: #262238; --line: #332e4a;
-  --text: #ece9f7; --muted: #9d97b8; --accent: #8b6cf6; --accent2: #c084fc;
-  --user: #3b2f7a; --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+  --night: #0E1A2B; --night-2: #15253A; --night-3: #1C3048; --line: #26405C;
+  --text: #F3EDE2; --muted: #93A3BA; --faint: #5F7590;
+  --marigold: #F4A73B; --rose: #E5577E; --teal: #2FB7A6; --amber: #F6C453; --danger: #F2735B;
+  --user: #1E4E58;
+  --ui: "Segoe UI Variable Text", "Segoe UI", "Nirmala UI", "Noto Sans Bengali", system-ui, sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI", "Nirmala UI", system-ui, sans-serif;
+  --orb: 232px;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: "Segoe UI", "Nirmala UI", "Noto Sans Bengali", system-ui, sans-serif;
-  background: radial-gradient(120% 80% at 50% 0%, #241d40 0%, var(--bg) 60%);
-  color: var(--text); display: flex; flex-direction: column; font-size: 15px;
+  font: 15px/1.6 var(--ui); color: var(--text); background: var(--night);
+  display: flex; flex-direction: column; overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+/* the sky: a still wash of dusk behind everything */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(70% 45% at 50% 18%, rgba(229, 87, 126, .16), transparent 70%),
+    radial-gradient(60% 40% at 50% 30%, rgba(244, 167, 59, .10), transparent 70%),
+    linear-gradient(180deg, #13233A 0%, var(--night) 55%);
 }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
-button:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
-svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+:focus-visible { outline: 2px solid var(--marigold); outline-offset: 3px; border-radius: 10px; }
+svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-.avatar { position: relative; width: 46px; height: 46px; border-radius: 50%; flex: none;
-  background: linear-gradient(135deg, var(--accent), var(--accent2)); display: grid; place-items: center;
-  font-weight: 700; font-size: 20px; color: #fff; }
-.avatar::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid transparent; }
-body[data-state="listening"] .avatar::after { border-color: var(--bad); animation: pulse 1.2s infinite; }
-body[data-state="speaking"] .avatar::after { border-color: var(--accent2); animation: pulse .8s infinite; }
-body[data-state="thinking"] .avatar::after, body[data-state="transcribing"] .avatar::after {
-  border-color: var(--accent2) transparent; animation: spin 1s linear infinite; }
-@keyframes pulse { 0% { transform: scale(1); opacity: 1 } 100% { transform: scale(1.35); opacity: 0 } }
-@keyframes spin { to { transform: rotate(360deg) } }
-.who { flex: 1; min-width: 0; }
-.who b { display: block; font-size: 17px; }
-.who span { color: var(--muted); font-size: 13px; }
-.icon { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
-.icon:hover { background: var(--panel2); color: var(--text); }
-.icon.on { color: var(--accent2); background: var(--panel2); }
-select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; font: inherit; font-size: 13px; }
+/* ---------- header ---------- */
+header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; }
+.brand { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.seal { width: 28px; height: 28px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 30%, var(--marigold), var(--rose) 55%, var(--teal)); }
+.brand b { font: 600 19px/1 var(--display); letter-spacing: .2px; }
+.brand small { display: block; color: var(--faint); font-size: 12px; margin-top: 3px; }
+.icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); transition: background .15s, color .15s; }
+.icon:hover { background: var(--night-3); color: var(--text); }
+.icon.on { color: var(--marigold); background: var(--night-3); }
+select { background: var(--night-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px 8px; font: 13px var(--ui); }
 
-.banner { display: none; padding: 8px 16px; font-size: 13px; background: #2a2440; color: var(--warn); border-bottom: 1px solid var(--line); }
+.menu { position: absolute; right: 12px; top: 54px; z-index: 10; min-width: 200px; padding: 6px;
+  background: var(--night-2); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(3, 8, 16, .55); display: none; }
+.menu.show { display: block; animation: drop .16s ease-out; }
+.menu button { display: block; width: 100%; text-align: left; padding: 9px 12px; border-radius: 9px; }
+.menu button:hover { background: var(--night-3); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
+@keyframes drop { from { opacity: 0; transform: translateY(-4px); } }
+
+.banner { display: none; margin: 10px 14px 0; padding: 8px 12px; border-radius: 10px; font-size: 13px;
+  color: #CFE3F5; background: rgba(95, 117, 144, .18); border: 1px solid rgba(95, 117, 144, .35); }
 body.private .banner { display: block; }
 
-main { flex: 1; overflow-y: auto; padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 10px; }
-.empty { margin: auto; text-align: center; color: var(--muted); max-width: 320px; line-height: 1.7; }
-.empty b { color: var(--text); font-size: 18px; display: block; margin-bottom: 6px; }
-.msg { max-width: 85%; padding: 10px 14px; border-radius: 16px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
-.msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 4px; }
-.msg.mira { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-.msg.error { align-self: center; color: var(--bad); font-size: 13px; background: none; }
-.msg .tag { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
-.msg.reminder { border-color: var(--warn); }
-.typing { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 4px 6px; display: none; }
-body[data-state="thinking"] .typing, body[data-state="transcribing"] .typing { display: block; }
+/* ---------- the orb ---------- */
+.stage { display: grid; justify-items: center; padding: 8px 16px 4px; transition: padding .4s ease; }
+.orb { position: relative; width: var(--orb); height: var(--orb); border-radius: 50%;
+  transition: width .45s cubic-bezier(.2, .8, .2, 1), height .45s cubic-bezier(.2, .8, .2, 1), transform .2s; }
+.orb:hover { transform: scale(1.02); }
+.orb:active { transform: scale(.98); }
+.orb canvas { position: absolute; inset: -22%; width: 144%; height: 144%; pointer-events: none; }
+.orb .glyph { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 250, 240, .92);
+  opacity: 0; transition: opacity .25s; }
+.orb .glyph svg { width: 30px; height: 30px; stroke-width: 2; filter: drop-shadow(0 1px 6px rgba(0,0,0,.35)); }
+body[data-state="idle"] .orb:hover .glyph, body[data-state="idle"] .orb:focus-visible .glyph { opacity: 1; }
+.caption { margin-top: 6px; min-height: 26px; text-align: center; font: 500 16px/1.5 var(--display); color: var(--text); }
+.caption small { display: block; font: 13px/1.4 var(--ui); color: var(--muted); }
+.controls { display: flex; gap: 8px; margin-top: 8px; min-height: 32px; }
+.pill { padding: 5px 13px; border-radius: 999px; font-size: 13px; color: var(--muted); border: 1px solid var(--line); transition: all .15s; }
+.pill:hover { color: var(--text); border-color: var(--faint); }
+.pill.on { color: var(--night); background: var(--teal); border-color: var(--teal); }
+.stop { display: none; }
+body:not([data-state="idle"]) .stop { display: inline-block; color: var(--text); border-color: var(--rose); }
 
-footer { padding: 10px 14px 14px; border-top: 1px solid var(--line); background: rgba(20,18,31,.7); }
-.voice { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 10px; }
-.mic { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
-  box-shadow: 0 6px 24px rgba(139,108,246,.35); transition: transform .15s; }
-.mic svg { width: 28px; height: 28px; }
-.mic:hover { transform: scale(1.05); }
-body[data-state="listening"] .mic { background: var(--bad); box-shadow: 0 0 0 calc(var(--lvl, 0) * 18px) rgba(248,113,113,.25); }
-body.private .mic { opacity: .4; }
-.side { width: 110px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.switch { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px; background: var(--panel2); font-size: 12px; color: var(--muted); }
-.switch.on { color: var(--text); background: var(--user); }
-.stop { visibility: hidden; padding: 6px 12px; border-radius: 20px; background: var(--panel2); font-size: 12px; }
-body:not([data-state="idle"]) .stop { visibility: visible; }
-.hint { text-align: center; font-size: 12px; color: var(--muted); min-height: 18px; margin-bottom: 8px; }
-.notice { color: var(--warn); }
-.compose { display: flex; align-items: flex-end; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 6px; }
-textarea { flex: 1; resize: none; border: 0; background: none; color: var(--text); font: inherit; padding: 8px 6px; max-height: 140px; min-height: 22px; }
-textarea:focus { outline: none; }
-.send { background: var(--accent); color: #fff; }
-.send:hover { background: var(--accent2); color: #fff; }
-.preview { display: none; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+/* when the talk has started, the orb steps back */
+body.talking { --orb: 108px; }
+body.talking .stage { padding-top: 2px; }
+body.talking .caption { font-size: 14px; margin-top: 12px; }
+body.talking .caption small { display: none; }
+
+/* ---------- conversation ---------- */
+main { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+.empty { margin: 4px auto 0; max-width: 380px; text-align: center; color: var(--muted); }
+.ideas { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.ideas button { padding: 7px 13px; border-radius: 999px; font-size: 13.5px; color: var(--text);
+  background: var(--night-2); border: 1px solid var(--line); transition: border-color .15s, background .15s; }
+.ideas button:hover { border-color: var(--marigold); background: var(--night-3); }
+body.talking .empty { display: none; }
+
+.msg { max-width: 86%; white-space: pre-wrap; word-wrap: break-word; animation: arrive .28s ease-out both; }
+@keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
+.msg.user { align-self: flex-end; padding: 9px 15px; border-radius: 20px 20px 6px 20px; background: var(--user); }
+.msg.mira { align-self: flex-start; padding: 2px 0 2px 16px; position: relative; line-height: 1.7; }
+.msg.mira::before { content: ""; position: absolute; left: 0; top: 9px; width: 8px; height: 8px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--marigold), var(--rose)); }
+.msg.reminder { padding: 10px 14px 10px 30px; border-radius: 14px; background: rgba(246, 196, 83, .1); border: 1px solid rgba(246, 196, 83, .35); }
+.msg.reminder::before { left: 14px; top: 18px; background: var(--amber); }
+.msg.error { align-self: center; color: var(--danger); font-size: 13px; }
+.msg .tag { display: block; margin-top: 4px; font-size: 12px; color: var(--faint); }
+.typing { align-self: flex-start; display: none; gap: 5px; padding: 8px 0 8px 16px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; animation: bob 1s ease-in-out infinite; }
+.typing i:nth-child(1) { background: var(--marigold); }
+.typing i:nth-child(2) { background: var(--rose); animation-delay: .15s; }
+.typing i:nth-child(3) { background: var(--teal); animation-delay: .3s; }
+@keyframes bob { 0%, 100% { transform: translateY(0); opacity: .5; } 50% { transform: translateY(-5px); opacity: 1; } }
+body[data-state="thinking"] .typing, body[data-state="transcribing"] .typing { display: flex; }
+
+/* ---------- writing ---------- */
+footer { padding: 6px 14px 14px; }
+.hint { min-height: 18px; margin: 0 4px 6px; font-size: 12.5px; color: var(--muted); text-align: center; }
+.hint.notice { color: var(--amber); }
+.preview { display: none; align-items: center; gap: 8px; margin: 0 4px 8px; font-size: 13px; color: var(--muted); }
 .preview.show { display: flex; }
-.preview img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.preview img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; }
+.compose { display: flex; align-items: flex-end; gap: 4px; padding: 5px; border-radius: 18px;
+  background: var(--night-2); border: 1px solid var(--line); transition: border-color .15s; }
+.compose:focus-within { border-color: var(--faint); }
+textarea { flex: 1; resize: none; border: 0; background: none; color: var(--text); font: 15px/1.5 var(--ui);
+  padding: 7px 6px; min-height: 22px; max-height: 140px; }
+textarea:focus { outline: none; }
+textarea::placeholder { color: var(--faint); }
+.send { color: var(--night); background: var(--marigold); }
+.send:hover { color: var(--night); background: #F7B95E; }
 
-.dialog { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; padding: 20px; }
+/* ---------- asking permission ---------- */
+.dialog { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; padding: 20px;
+  background: rgba(6, 12, 22, .6); backdrop-filter: blur(3px); }
 .dialog.show { display: grid; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; max-width: 360px; width: 100%; }
-.card h3 { margin: 0 0 8px; font-size: 16px; color: var(--warn); }
-.card p { margin: 0 0 16px; line-height: 1.6; }
+.card { width: 100%; max-width: 360px; padding: 20px; border-radius: 18px; background: var(--night-2);
+  border: 1px solid rgba(246, 196, 83, .45); animation: rise .2s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.card h3 { margin: 0 0 6px; font: 600 17px var(--display); color: var(--amber); }
+.card p { margin: 0 0 18px; }
 .row { display: flex; gap: 8px; justify-content: flex-end; }
-.btn { padding: 9px 16px; border-radius: 10px; background: var(--panel2); }
-.btn.yes { background: var(--accent); color: #fff; }
-.menu { position: absolute; right: 14px; top: 62px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: none; z-index: 5; min-width: 180px; }
-.menu.show { display: block; }
-.menu button { display: block; width: 100%; text-align: left; padding: 9px 12px; border-radius: 8px; }
-.menu button:hover { background: var(--panel2); }
-.drop { outline: 2px dashed var(--accent2); outline-offset: -8px; }
+.btn { padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line); }
+.btn.yes { color: var(--night); background: var(--amber); border-color: var(--amber); font-weight: 600; }
+
+body.drop .compose { border-color: var(--marigold); border-style: dashed; }
+
+@media (max-height: 640px) { :root { --orb: 170px; } body.talking { --orb: 84px; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before { animation: none !important; transition: none !important; }
+}
 </style>
 </head>
 <body data-state="idle">
 <header>
-  <div class="avatar" id="avatar">M</div>
-  <div class="who"><b id="name">Mira</b><span id="status">তৈরি</span></div>
-  <select id="lang" title="কোন ভাষায় কথা বলবে">
+  <div class="brand"><span class="seal" aria-hidden="true"></span><div><b id="name">Mira</b><small id="wakeNote"></small></div></div>
+  <select id="lang" title="তুমি কোন ভাষায় বলবে">
     <option value="bn">বাংলা</option><option value="en">English</option><option value="">Auto</option>
   </select>
-  <button class="icon" id="privateBtn" title="প্রাইভেট মোড"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
-  <button class="icon" id="muteBtn" title="ভয়েস চালু/বন্ধ"><svg viewBox="0 0 24 24" id="muteIcon"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
-  <button class="icon" id="menuBtn" title="আরও"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+  <button class="icon" id="privateBtn" title="প্রাইভেট মোড" aria-label="প্রাইভেট মোড"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+  <button class="icon" id="muteBtn" title="মিরার ভয়েস" aria-label="মিরার ভয়েস চালু বা বন্ধ"><svg viewBox="0 0 24 24" id="muteIcon"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+  <button class="icon" id="menuBtn" title="আরও" aria-label="আরও"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
 </header>
 <div class="menu" id="menu">
   <button id="briefBtn">আজকের ব্রিফিং</button>
-  <button id="cardsBtn">ফ্ল্যাশকার্ড পড়া</button>
+  <button id="cardsBtn">ফ্ল্যাশকার্ড দিয়ে কুইজ</button>
+  <hr>
   <button id="clearBtn">নতুন করে কথা শুরু</button>
   <button id="quitBtn">মিরা বন্ধ করো</button>
 </div>
-<div class="banner">প্রাইভেট মোড: কথা শুধু এই পিসির Ollama তে যাবে। মাইক আর ভয়েস বন্ধ।</div>
+<div class="banner">প্রাইভেট মোড: কথা শুধু এই পিসিতে থাকবে। মিরার ভয়েস বন্ধ, মাইক শুধু English এ।</div>
+
+<section class="stage">
+  <button class="orb" id="micBtn" aria-label="কথা বলো">
+    <canvas id="orb" aria-hidden="true"></canvas>
+    <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></span>
+  </button>
+  <div class="caption" aria-live="polite"><span id="status">কথা বলতে বৃত্তে চাপো</span><small id="subStatus">অথবা বলো "Hey Mira"</small></div>
+  <div class="controls">
+    <button class="pill" id="convoBtn" title="উত্তরের পরে নিজে থেকেই আবার শুনবে">একটানা কথা</button>
+    <button class="pill stop" id="stopBtn">থামাও</button>
+  </div>
+</section>
 
 <main id="chat">
-  <div class="empty" id="empty"><b>হ্যালো!</b>মাইকে চাপ দিয়ে কথা বলো, অথবা নিচে লিখে পাঠাও।<br>যেমন: "WhatsApp খোলো", "x² − 5x + 6 = 0 সমাধান করো", "আজকের আবহাওয়া কেমন?", "Downloads গুছিয়ে দাও"</div>
-  <div class="typing" id="typing">ভাবছি...</div>
+  <div class="empty" id="empty">
+    মাইকে বলো বা নিচে লেখো। কিছু দিয়ে শুরু করতে পারো:
+    <div class="ideas">
+      <button data-say="আজকের আবহাওয়া কেমন?">আজকের আবহাওয়া</button>
+      <button data-say="আজকের ব্রিফিং দাও।">আজকের ব্রিফিং</button>
+      <button data-say="x^2 - 5x + 6 = 0 ধাপে ধাপে সমাধান করো।">একটা অঙ্ক সমাধান</button>
+      <button data-say="Downloads ফোল্ডারটা গুছিয়ে দাও।">Downloads গোছাও</button>
+      <button data-say="আজ মনটা ভালো নেই।">মন ভালো নেই</button>
+    </div>
+  </div>
+  <div class="typing" id="typing" aria-label="ভাবছি"><i></i><i></i><i></i></div>
 </main>
 
 <footer>
-  <div class="voice">
-    <div class="side"><button class="switch" id="convoBtn" title="উত্তরের পরে নিজে থেকেই আবার শুনবে">একটানা কথা</button></div>
-    <button class="mic" id="micBtn" title="কথা বলো"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
-    <div class="side"><button class="stop" id="stopBtn">থামাও</button></div>
-  </div>
-  <div class="hint" id="hint"></div>
-  <div class="preview" id="preview"><img id="previewImg" alt=""><span id="previewText">ছবি যোগ হয়েছে</span><button class="icon" id="removeImg" title="ছবি বাদ দাও"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+  <div class="hint" id="hint" aria-live="polite"></div>
+  <div class="preview" id="preview"><img id="previewImg" alt=""><span id="previewText">ছবি যোগ হয়েছে</span><button class="icon" id="removeImg" title="বাদ দাও" aria-label="বাদ দাও"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
   <div class="compose">
-    <button class="icon" id="imageBtn" title="ছবি বা PDF যোগ করো (Ctrl+V, drag দিয়েও হবে)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></button>
-    <button class="icon" id="screenBtn" title="স্ক্রিন দেখাও"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
-    <textarea id="input" rows="1" placeholder="এখানে লেখো..."></textarea>
-    <button class="icon send" id="sendBtn" title="পাঠাও"><svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
+    <button class="icon" id="imageBtn" title="ছবি বা PDF যোগ করো (Ctrl+V বা টেনে এনেও হবে)" aria-label="ছবি বা ফাইল যোগ করো"><svg viewBox="0 0 24 24"><path d="m21.4 11.6-8.8 8.8a5.5 5.5 0 0 1-7.8-7.8l8.8-8.8a3.7 3.7 0 0 1 5.2 5.2l-8.8 8.8a1.8 1.8 0 0 1-2.6-2.6l8.1-8.1"/></svg></button>
+    <button class="icon" id="screenBtn" title="স্ক্রিন দেখাও" aria-label="স্ক্রিন দেখাও"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+    <textarea id="input" rows="1" placeholder="মিরাকে লেখো..."></textarea>
+    <button class="icon send" id="sendBtn" title="পাঠাও" aria-label="পাঠাও"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
   </div>
   <input type="file" id="file" accept="image/*,.pdf,.txt,.md,.csv" hidden>
 </footer>
 
-<div class="dialog" id="dialog">
+<div class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="askTitle">
   <div class="card">
-    <h3>অনুমতি লাগবে</h3>
+    <h3 id="askTitle">তোমার অনুমতি লাগবে</h3>
     <p id="question"></p>
     <div class="row"><button class="btn" id="noBtn">না</button><button class="btn yes" id="yesBtn">হ্যাঁ, করো</button></div>
   </div>
@@ -148,8 +220,9 @@ textarea:focus { outline: none; }
 <script nonce="__NONCE__">
 const TOKEN = "__TOKEN__";
 const $ = id => document.getElementById(id);
-const STATUS = { idle: "তৈরি", listening: "শুনছি... বলা শেষ হলে থামলেই হবে", transcribing: "কথা লিখছি...",
+const STATUS = { idle: "কথা বলতে বৃত্তে চাপো", listening: "শুনছি...", transcribing: "বুঝছি...",
   thinking: "ভাবছি...", confirm: "তোমার অনুমতির অপেক্ষা", speaking: "বলছি..." };
+const SUB = { listening: "বলা শেষ হলে একটু থামো, বা বৃত্তে আবার চাপো", speaking: "মাঝখানে বলতে চাইলে বৃত্তে চাপো" };
 const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "ওয়েবসাইট", web_search: "সার্চ", volume: "ভলিউম",
   take_screenshot: "স্ক্রিনশট", find_file: "ফাইল খোঁজা", lock_pc: "পিসি লক", shutdown_pc: "শাটডাউন",
   add_note: "নোট", read_notes: "নোট পড়া", remember: "মনে রাখা", set_reminder: "রিমাইন্ডার", calculate: "হিসাব",
@@ -162,6 +235,140 @@ const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "�
   log_mood: "মুড ডায়েরি", mood_summary: "মুড ডায়েরি" };
 let last = 0, view = null, picture = null, doc = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
 
+/* ---------- the orb: soft colour blobs that breathe, listen, think and speak ---------- */
+const Orb = (() => {
+  const canvas = $("orb"), ctx = canvas.getContext("2d");
+  const still = matchMedia("(prefers-reduced-motion: reduce)");
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const PALETTES = {
+    idle:         ["#F4A73B", "#E5577E", "#2FB7A6"],
+    listening:    ["#FF6F91", "#F4A73B", "#FF9A62"],
+    transcribing: ["#2FB7A6", "#7CC8F2", "#F4A73B"],
+    thinking:     ["#2FB7A6", "#7CC8F2", "#E5577E"],
+    speaking:     ["#F4A73B", "#E5577E", "#FFD27A"],
+    confirm:      ["#F6C453", "#F4A73B", "#F6C453"],
+    private:      ["#5F7FA3", "#2FB7A6", "#3B5878"],
+  };
+  // speed: how fast it moves; wobble: how much the shape bends; spin: how fast the blobs circle
+  const MOODS = {
+    idle: { speed: .35, wobble: .06, spin: .12, size: 1 },
+    listening: { speed: 1.1, wobble: .10, spin: .35, size: 1.02 },
+    transcribing: { speed: 1.6, wobble: .08, spin: 1.3, size: .94 },
+    thinking: { speed: 1.6, wobble: .08, spin: 1.3, size: .94 },
+    speaking: { speed: 1.2, wobble: .12, spin: .5, size: 1.04 },
+    confirm: { speed: .5, wobble: .05, spin: .2, size: 1 },
+  };
+  const blobs = [0, 1, 2].map(i => ({ phase: i * 2.09, orbit: .36 - i * .03, size: .74 - i * .05, seed: i * 13.7 }));
+  let colors = PALETTES.idle.map(hex), target = colors, mood = { ...MOODS.idle }, goal = MOODS.idle;
+  let state = "idle", level = 0, heard = 0, t = 0, spin = 0, before = performance.now(), rings = [];
+
+  function set(next, isPrivate, micLevel) {
+    if (next !== state) { state = next; if (next === "listening") rings = []; }
+    goal = MOODS[next] || MOODS.idle;
+    target = (isPrivate && next === "idle" ? PALETTES.private : PALETTES[next] || PALETTES.idle).map(hex);
+    heard = micLevel || 0;
+    if (still.matches) frame(performance.now());
+  }
+
+  function shape(cx, cy, r, wobble, seed) {
+    ctx.beginPath();
+    const steps = 64;
+    for (let i = 0; i <= steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      const bend = Math.sin(a * 3 + t * 1.3 + seed) * .55 + Math.sin(a * 5 - t * .9 + seed * 2) * .3 + Math.sin(a * 2 + t * .6) * .15;
+      const rr = r * (1 + wobble * bend);
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  function frame(now) {
+    const dt = Math.min(.05, (now - before) / 1000); before = now;
+    const ease = 1 - Math.pow(.02, dt);  // smooth, frame-rate independent
+    for (const k of ["speed", "wobble", "spin", "size"]) mood[k] += (goal[k] - mood[k]) * ease;
+    colors = colors.map((c, i) => c.map((v, j) => v + (target[i][j] - v) * ease));
+    const voice = state === "speaking" ? .28 + .22 * Math.abs(Math.sin(t * 6.3) * Math.sin(t * 2.1 + 1)) : 0;
+    level += ((state === "listening" ? heard : voice) - level) * Math.min(1, ease * 3);
+    if (!still.matches) { t += dt * mood.speed; spin += dt * mood.spin; }
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const cx = w / 2, cy = h / 2, base = (w / 1.44) / 2;  // the orb's own radius inside the larger canvas
+    const r = base * mood.size * (1 + .035 * Math.sin(t * 1.7) + .16 * level);
+    ctx.clearRect(0, 0, w, h);
+
+    // glow around the orb
+    const [a, b] = colors;
+    const glow = ctx.createRadialGradient(cx, cy, r * .7, cx, cy, Math.min(r * 1.4, w / 2 - 1));
+    glow.addColorStop(0, `rgba(${a.map(Math.round)}, ${.28 + level * .25})`);
+    glow.addColorStop(1, `rgba(${b.map(Math.round)}, 0)`);
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+
+    // listening: ripples that answer your voice
+    if (state === "listening" && !still.matches) {
+      if (level > .18 && (!rings.length || rings[rings.length - 1].r > r * 1.12)) rings.push({ r: r * 1.02, life: 1 });
+      ctx.lineWidth = 1.5 * dpr;
+      rings = rings.filter(ring => (ring.r += dt * r * .55, ring.life -= dt * .9) > 0);
+      for (const ring of rings) {
+        ctx.strokeStyle = `rgba(${a.map(Math.round)}, ${ring.life * .45})`;
+        ctx.beginPath(); ctx.arc(cx, cy, ring.r, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // the body: three coloured blobs blended inside a circle
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+    const deep = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    deep.addColorStop(0, `rgb(${colors[1].map(v => Math.round(v * .5))})`);
+    deep.addColorStop(1, "rgb(22, 30, 58)");
+    ctx.fillStyle = deep;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.filter = `blur(${Math.round(r * .16)}px)`;
+    ctx.globalCompositeOperation = "screen";
+    blobs.forEach((blob, i) => {
+      const angle = spin * (i % 2 ? -1 : 1) + blob.phase;
+      const bx = cx + Math.cos(angle) * r * blob.orbit, by = cy + Math.sin(angle) * r * blob.orbit;
+      const br = r * blob.size * (1 + level * .25);
+      const fill = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+      const c = colors[i].map(Math.round);
+      fill.addColorStop(0, `rgba(${c}, .85)`);
+      fill.addColorStop(.55, `rgba(${c}, .5)`);
+      fill.addColorStop(1, `rgba(${c}, 0)`);
+      ctx.fillStyle = fill;
+      shape(bx, by, br, mood.wobble + level * .12, blob.seed);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    // glassy light on top, so it reads as a sphere
+    const shine = ctx.createRadialGradient(cx - r * .35, cy - r * .45, 0, cx - r * .35, cy - r * .45, r * .9);
+    shine.addColorStop(0, "rgba(255, 250, 240, .26)");
+    shine.addColorStop(1, "rgba(255, 250, 240, 0)");
+    ctx.fillStyle = shine;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = Math.max(1, dpr);  // a fine rim keeps the sphere crisp
+    ctx.strokeStyle = "rgba(255, 245, 230, .14)";
+    ctx.beginPath(); ctx.arc(cx, cy, r - ctx.lineWidth / 2, 0, Math.PI * 2); ctx.stroke();
+
+    // thinking: a thin arc travelling around the edge
+    if ((state === "thinking" || state === "transcribing") && !still.matches) {
+      ctx.lineWidth = 2 * dpr; ctx.lineCap = "round";
+      ctx.strokeStyle = `rgba(${colors[1].map(Math.round)}, .85)`;
+      ctx.beginPath(); ctx.arc(cx, cy, r * 1.1, spin * 2.2, spin * 2.2 + 1.1); ctx.stroke();
+    }
+
+    if (!still.matches && !document.hidden) requestAnimationFrame(frame);
+  }
+
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { before = performance.now(); requestAnimationFrame(frame); } });
+  still.addEventListener("change", () => requestAnimationFrame(frame));
+  requestAnimationFrame(frame);
+  return { set };
+})();
+
+/* ---------- talking to the server ---------- */
 async function api(path, body) {
   const options = { headers: { "X-Token": TOKEN } };
   if (body !== undefined) { options.method = "POST"; options.body = JSON.stringify(body); options.headers["Content-Type"] = "application/json"; }
@@ -175,7 +382,7 @@ async function api(path, body) {
 function hint(text, notice) { const h = $("hint"); h.textContent = text || ""; h.classList.toggle("notice", !!notice); }
 
 function addMessage(m) {
-  $("empty").style.display = "none";
+  document.body.classList.add("talking");
   const div = document.createElement("div");
   div.className = "msg " + m.role + (m.reminder ? " reminder" : "");
   div.textContent = m.text;
@@ -185,27 +392,31 @@ function addMessage(m) {
   if (m.document) tags.push("ফাইল: " + m.document);
   (m.tools || []).forEach(t => tags.push(TOOLS[t] || t));
   if (m.took) tags.push(m.took + " সেকেন্ডে");
-  if (tags.length) { const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = tags.join(" · "); div.appendChild(tag); }
+  if (tags.length) { const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = tags.join(", "); div.appendChild(tag); }
   $("chat").insertBefore(div, $("typing"));
   div.scrollIntoView({ block: "end", behavior: "smooth" });
 }
 
+function clearChat() {
+  document.querySelectorAll(".msg").forEach(e => e.remove());
+  document.body.classList.remove("talking");
+}
+
 function render(s) {
   if (view !== null && view !== s.private) {  // switched mode: show the other chat
-    document.querySelectorAll(".msg").forEach(e => e.remove());
-    $("empty").style.display = ""; last = 0; view = s.private; return true;
+    clearChat(); last = 0; view = s.private; return true;
   }
   view = s.private;
   s.messages.forEach(m => { addMessage(m); last = Math.max(last, m.id); });
   document.body.dataset.state = s.state;
   document.body.classList.toggle("private", s.private);
-  document.body.style.setProperty("--lvl", s.level);
+  Orb.set(s.state, s.private, s.level);
   $("name").textContent = s.name;
-  $("avatar").textContent = (s.name || "M")[0].toUpperCase();
   document.title = s.name;
-  let status = STATUS[s.state] || s.state;
-  if (s.state === "idle" && s.wake === "listening") status = "তৈরি · \"Hey Mira\" শুনছি";
-  $("status").textContent = status;
+  $("wakeNote").textContent = s.wake === "listening" ? "\"Hey Mira\" বললেই শুনবে" : "";
+  $("status").textContent = STATUS[s.state] || s.state;
+  $("subStatus").textContent = SUB[s.state] || (s.wake === "listening" ? "অথবা বলো \"Hey Mira\"" : "অথবা নিচে লেখো");
+  $("micBtn").setAttribute("aria-label", s.state === "listening" ? "বলা শেষ" : "কথা বলো");
   $("privateBtn").classList.toggle("on", s.private);
   $("muteBtn").classList.toggle("on", s.muted);
   $("muteIcon").innerHTML = s.muted ? '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/>'
@@ -213,8 +424,6 @@ function render(s) {
   $("convoBtn").classList.toggle("on", s.convo);
   if (document.activeElement !== $("lang")) $("lang").value = s.language;
   if (s.notice.id > shownNotice) { shownNotice = s.notice.id; hint(s.notice.text, true); }
-  else if (s.state === "listening") hint("বলো... শেষ হলে চুপ থাকো বা মাইকে আবার চাপো");
-  else if (s.state === "speaking") hint("মাঝখানে বলতে চাইলে মাইকে চাপো");
   else if (wasActive && s.state === "idle") hint("");
   wasActive = s.state !== "idle";
   pendingAsk = s.ask;
@@ -225,16 +434,17 @@ function render(s) {
 async function poll() {
   let again = false;
   try { again = render(await api("/api/updates?after=" + last)); }
-  catch (e) { if (e.message !== "reload") $("status").textContent = "মিরা বন্ধ আছে"; }
-  setTimeout(poll, again ? 0 : document.body.dataset.state === "idle" ? 700 : 250);
+  catch (e) { if (e.message !== "reload") { $("status").textContent = "মিরা বন্ধ আছে"; $("subStatus").textContent = "Desktop এর Mira আইকন থেকে আবার খোলো"; } }
+  const state = document.body.dataset.state;
+  setTimeout(poll, again ? 0 : state === "listening" ? 120 : state === "idle" ? 700 : 250);
 }
 
-async function send() {
-  const text = $("input").value.trim();
+async function send(text) {
+  text = (text ?? $("input").value).trim();
   if (!text && !picture && !doc) return;
   const res = await api("/api/send", { text, image: picture, document: doc });
   if (res.ok) { $("input").value = ""; grow(); setPicture(null); }
-  else if (!res.error) hint("একটু অপেক্ষা করো, আগের কাজ চলছে।", true);
+  else if (!res.error) hint("আগের কাজটা শেষ হোক, তারপর পাঠাও।", true);
 }
 
 function setPicture(url, name) {
@@ -249,7 +459,7 @@ function setPicture(url, name) {
 function loadPicture(file) {
   if (!file) return;
   if (/\.(pdf|txt|md|csv)$/i.test(file.name)) {
-    if (file.size > 14 * 1024 * 1024) { hint("ফাইলটা অনেক বড় (১৪ MB এর বেশি)।", true); return; }
+    if (file.size > 14 * 1024 * 1024) { hint("ফাইলটা ১৪ MB এর বেশি। ছোট ফাইল দাও।", true); return; }
     const reader = new FileReader();
     reader.onload = () => setPicture(reader.result, file.name);
     reader.readAsDataURL(file);
@@ -272,7 +482,7 @@ function grow() { const t = $("input"); t.style.height = "auto"; t.style.height 
 
 async function screen() {
   const text = $("input").value.trim();
-  for (let i = 3; i > 0; i--) { hint(i + " সেকেন্ড পর স্ক্রিন দেখব। যে জিনিস দেখাতে চাও সেটা সামনে আনো।"); await new Promise(r => setTimeout(r, 1000)); }
+  for (let i = 3; i > 0; i--) { hint(i + " সেকেন্ড পর স্ক্রিন দেখব। যা দেখাতে চাও সেটা সামনে আনো।"); await new Promise(r => setTimeout(r, 1000)); }
   hint("");
   const res = await api("/api/send", { text, screen: true });
   if (res.ok) { $("input").value = ""; grow(); }
@@ -282,13 +492,14 @@ function answer(yes) { answeredAsk = pendingAsk; $("dialog").classList.remove("s
 
 $("micBtn").addEventListener("click", () => api("/api/mic", {}));
 $("stopBtn").addEventListener("click", () => api("/api/stop", {}));
-$("sendBtn").addEventListener("click", send);
+$("sendBtn").addEventListener("click", () => send());
 $("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 $("input").addEventListener("input", grow);
 $("imageBtn").addEventListener("click", () => $("file").click());
 $("file").addEventListener("change", e => { loadPicture(e.target.files[0]); e.target.value = ""; });
 $("removeImg").addEventListener("click", () => setPicture(null));
 $("screenBtn").addEventListener("click", screen);
+document.querySelectorAll(".ideas button").forEach(b => b.addEventListener("click", () => send(b.dataset.say)));
 $("privateBtn").addEventListener("click", () => api("/api/settings", { private: !document.body.classList.contains("private") }));
 $("muteBtn").addEventListener("click", () => api("/api/settings", { muted: !$("muteBtn").classList.contains("on") }));
 $("convoBtn").addEventListener("click", () => api("/api/settings", { convo: !$("convoBtn").classList.contains("on") }));
@@ -297,19 +508,16 @@ $("yesBtn").addEventListener("click", () => answer(true));
 $("noBtn").addEventListener("click", () => answer(false));
 $("menuBtn").addEventListener("click", e => { e.stopPropagation(); $("menu").classList.toggle("show"); });
 document.addEventListener("click", () => $("menu").classList.remove("show"));
-$("briefBtn").addEventListener("click", () => api("/api/send", { text: "আজকের ব্রিফিং দাও।" }));
-$("cardsBtn").addEventListener("click", () => api("/api/send", { text: "আজকের ফ্ল্যাশকার্ড দিয়ে আমাকে কুইজ নাও।" }));
-$("clearBtn").addEventListener("click", async () => {
-  const res = await api("/api/clear", {});
-  if (res.ok) { document.querySelectorAll(".msg").forEach(e => e.remove()); $("empty").style.display = ""; }
-});
-$("quitBtn").addEventListener("click", async () => { await api("/api/quit", {}); $("status").textContent = "মিরা বন্ধ হয়েছে। জানালাটা বন্ধ করে দাও।"; window.close(); });
+$("briefBtn").addEventListener("click", () => send("আজকের ব্রিফিং দাও।"));
+$("cardsBtn").addEventListener("click", () => send("আজকের ফ্ল্যাশকার্ড দিয়ে আমাকে কুইজ নাও।"));
+$("clearBtn").addEventListener("click", async () => { const res = await api("/api/clear", {}); if (res.ok) clearChat(); });
+$("quitBtn").addEventListener("click", async () => { await api("/api/quit", {}); $("status").textContent = "মিরা বন্ধ হয়েছে"; $("subStatus").textContent = "জানালাটা বন্ধ করে দাও"; window.close(); });
 document.addEventListener("paste", e => { const item = [...e.clipboardData.items].find(i => i.type.startsWith("image/")); if (item) { e.preventDefault(); loadPicture(item.getAsFile()); } });
 document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drop"); });
 document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("drop"); });
 document.addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("drop"); loadPicture(e.dataTransfer.files[0]); });
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") api("/api/stop", {});
+  if (e.key === "Escape") { api("/api/stop", {}); $("menu").classList.remove("show"); }
   if (e.ctrlKey && e.code === "Space") { e.preventDefault(); api("/api/mic", {}); }
 });
 poll();
