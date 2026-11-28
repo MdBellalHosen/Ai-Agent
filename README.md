@@ -168,6 +168,9 @@ Token `data\google_token.json` e thake. Bondho korte file ta muche dao, ar
 
 ## Mira voice e kotha na bolle
 
+Mira ja likhe, pura ta voice eo bole, lomba uttor holeo. Kono tukro toiri na hole abar chesta kore.
+Protita uttor er niche **আবার শোনো** chaple oi uttor abar shona jay.
+
 Mira r voice ekhon Mira r window nijei bajay (Edge/Chrome er sound), tai Windows e browser e sound
 bajle Mira o bajbe. Window lukano thakle ba browser na dile Python bajay.
 

@@ -24,8 +24,10 @@ stop_flag = threading.Event()
 
 
 def clean_text(text):
-    """Remove markdown symbols so they are not read aloud."""
-    return re.sub(r"[*#`_>|]", " ", text).strip()[:1500]
+    """Remove markdown symbols so they are not read aloud. Everything else is kept and spoken."""
+    text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1", str(text))  # [title](link) -> title
+    text = re.sub(r"https?://\S+", " ", text)  # long links are not read letter by letter
+    return re.sub(r"[ \t]+", " ", re.sub(r"[*#`_>|~]", " ", text)).strip()
 
 
 def pick_voice(text):
@@ -181,11 +183,16 @@ def speak(text, player=None):
         for piece in pieces:
             if stop_flag.is_set():
                 break
-            try:
-                ready.put(tts_bytes(piece))
-            except Exception as err:
-                failed.append(err)
-                break
+            for attempt in range(3):  # a piece that fails once is tried again, so nothing is skipped
+                try:
+                    ready.put(tts_bytes(piece))
+                    break
+                except Exception as err:
+                    if attempt == 2:
+                        failed.append(err)
+                        ready.put(None)
+                        return
+                    time.sleep(0.4)
         ready.put(None)
 
     threading.Thread(target=make, daemon=True).start()

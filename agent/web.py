@@ -231,6 +231,12 @@ class App:
         self.set_state("speaking")
         voice.speak(answer, player=self.browser_play)
 
+    def say_again(self, text):
+        if voice.settings["muted"]:
+            self.tell("মিরার ভয়েস বন্ধ আছে। উপরের স্পিকার বাটনে চাপ দাও।")
+            return
+        voice.speak(text, player=self.browser_play)
+
     def browser_play(self, audio):
         """Plays one piece in the window. False means the window could not, so Python plays it."""
         if not self.page_open():
@@ -513,6 +519,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {"ok": bool(app.mic())})
         if path == "/api/audio/done":
             return self.reply(200, {"ok": app.audio_finished(data)})
+        if path == "/api/say":  # "hear it again" on one of Mira's messages
+            with app.lock:
+                found = next((m for m in app.messages if m["id"] == data.get("id") and m["role"] == "mira"
+                              and m["private"] == app.private), None)
+            if not found or app.private:
+                return self.reply(400, {"error": "এই উত্তরটা শোনানো যাচ্ছে না"})
+            ok = app.start("speaking", app.say_again, found["text"])
+            return self.reply(200 if ok else 409, {"ok": ok})
         if path == "/api/voicetest":
             return self.reply(200 if app.start("speaking", app.voice_test) else 409, {"ok": True})
         if path == "/api/stop":
