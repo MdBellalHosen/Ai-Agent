@@ -68,13 +68,13 @@ def report(message):
 
 
 def play_mp3(audio):
-    try:
-        pygame = mixer()
-    except Exception as err:
-        if os.name != "nt":
-            raise
-        print(f"  [pygame problem] {err}, using Windows player")
-        return play_windows(audio)
+    """On Windows the built-in player comes first (it always uses the normal speaker); pygame is the backup."""
+    if os.name == "nt" and config.env("PLAYER", "windows") != "pygame":
+        try:
+            return play_windows(audio)
+        except Exception as err:
+            print(f"  [windows player problem] {err}, trying pygame")
+    pygame = mixer()
     with speak_lock:
         fd, path = tempfile.mkstemp(suffix=".mp3")
         try:
@@ -122,8 +122,11 @@ def play_windows(audio, kind="mp3"):
             with os.fdopen(fd, "wb") as f:
                 f.write(audio)
             kind_name = "mpegvideo" if kind == "mp3" else "waveaudio"
-            if mci(f'open "{path}" type {kind_name} alias mira', None, 0, None):
-                raise RuntimeError("Windows could not open the sound")
+            code = mci(f'open "{path}" type {kind_name} alias mira', None, 0, None)
+            if code:
+                reason = ctypes.create_unicode_buffer(256)
+                ctypes.windll.winmm.mciGetErrorStringW(code, reason, 256)
+                raise RuntimeError(f"Windows could not open the sound: {reason.value or code}")
             mci("play mira", None, 0, None)
             status = ctypes.create_unicode_buffer(32)
             while not stop_flag.is_set():
@@ -168,55 +171,57 @@ def warm_up():
         print(f"  [voice warm up] {err}")
 
 
+def make_piece(piece):
+    """Voice for one piece, tried up to three times so a network blip does not drop words."""
+    for attempt in range(3):
+        try:
+            return tts_bytes(piece)
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(0.4)
+
+
 def speak(text, player=None):
-    """Plays piece by piece: the next piece is made while the current one plays.
-    player(audio) may play a piece somewhere else (the app window); False means play it here."""
+    """Speaks the whole text. Pieces are made three at a time and played in order, so the
+    first words come quickly. player(audio) may play a piece in the app window; False means here."""
     if settings["muted"] or settings["private"]:  # private text never goes online
         return
-    import queue
-    pieces, ready = sentences(text), queue.Queue(maxsize=2)
+    from concurrent.futures import ThreadPoolExecutor
+    pieces = sentences(text)
+    if not pieces:
+        return
     stop_flag.clear()
-
+    pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="voice")
+    jobs = [pool.submit(make_piece, piece) for piece in pieces]
     failed = []
-
-    def make():
-        for piece in pieces:
+    try:
+        for job in jobs:
             if stop_flag.is_set():
                 break
-            for attempt in range(3):  # a piece that fails once is tried again, so nothing is skipped
-                try:
-                    ready.put(tts_bytes(piece))
-                    break
-                except Exception as err:
-                    if attempt == 2:
-                        failed.append(err)
-                        ready.put(None)
-                        return
-                    time.sleep(0.4)
-        ready.put(None)
-
-    threading.Thread(target=make, daemon=True).start()
-    while not stop_flag.is_set():
-        audio = ready.get()
-        if audio is None:
-            break
-        if audio:
+            try:
+                audio = job.result(timeout=60)
+            except Exception as err:
+                failed.append(err)
+                continue  # say the rest even if one piece could not be made
             try:
                 if not (player and player(audio)):
                     play_mp3(audio)
             except Exception as err:
                 report(f"ভয়েস বাজাতে সমস্যা: {err}")
                 break
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     if failed and not stop_flag.is_set():
         english = not re.search(r"[\u0980-\u09FF]", text)
-        if os.name == "nt" and english:
+        if os.name == "nt" and english and len(failed) == len(pieces):
             try:
                 windows_voice(clean_text(text))
             except Exception as err:
                 report(f"ভয়েস তৈরি হয়নি: {err}")
         else:
-            report(f"ভয়েস তৈরি হয়নি (ইন্টারনেট দেখো): {failed[0]}")
-    stop_flag.set()  # lets the maker thread finish
+            report(f"কিছু অংশের ভয়েস তৈরি হয়নি (ইন্টারনেট দেখো): {failed[0]}")
+    stop_flag.set()
 
 
 def stop_speaking():

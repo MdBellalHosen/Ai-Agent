@@ -38,7 +38,9 @@ MAX_BODY = 20 * 1024 * 1024
 IDLE_LIMIT = 300  # seconds without a window before the server closes (when wake word is off)
 LANGUAGES = ("bn", "en", "")
 CHIME_DELAY = 0.35  # let the chime finish before recording
-BROWSER_PICKUP = 1.5  # seconds the window gets to start fetching a voice piece
+BROWSER_PICKUP = 2.0  # seconds the window gets to take a voice piece it is waiting for
+AUDIO_WAIT = 20  # seconds one waiting request from the window stays open
+START_WAIT = 5.0  # seconds the window gets to start playing a piece it took
 # Gemini hears the voice and answers in one step (faster, understands with context).
 DIRECT_VOICE = config.env("VOICE_MODE", "direct").lower() != "separate"
 
@@ -64,7 +66,6 @@ class App:
         self.direct_failures = 0
         self.muted_told = False
         self.wake_on = True  # the menu can pause "Hey Mira" for this session
-        self.page_visible = True
         self.click_told = False
         self.last_play = ""
         self.via_wake = False
@@ -72,6 +73,13 @@ class App:
         self.audio, self.audio_id = None, 0
         self.audio_taken, self.audio_done = threading.Event(), threading.Event()
         self.audio_result = {}
+        # The window keeps one request open that waits for the next voice piece. A waiting
+        # request is answered at once, even when the window is behind others or minimized.
+        self.audio_ready = threading.Condition(self.lock)
+        self.audio_waiters = 0
+        self.audio_turn = 0  # only the newest waiting request counts (an old window may be gone)
+        self.audio_started = threading.Event()
+        self.stops = 0  # tells the window to stop playing
 
     # ---------- shared state ----------
     @property
@@ -106,7 +114,7 @@ class App:
                 "question": self.question if self.state == "confirm" else None, "ask": self.ask_id,
                 "mic": voice.can_listen(), "wake": self.wake.status if self.wake else "off",
                 "wake_on": self.wake_on,
-                "play": {"id": self.audio["id"]} if self.audio and not self.audio_done.is_set() else None,
+                "stops": self.stops,
                 "messages": [m for m in self.messages if m["id"] > after and m["private"] == self.private],
             }
 
@@ -240,23 +248,33 @@ class App:
 
     def browser_play(self, audio):
         """Plays one piece in the window. False means the window could not, so Python plays it."""
-        if not self.page_open():
-            self.last_play = "no window"
-            return False
-        if not self.page_visible:  # minimized windows play late
-            self.last_play = "window hidden"
-            return False
+        deadline = time.monotonic() + 0.6
+        while not self.audio_waiters:  # the window asks again right after each piece
+            if time.monotonic() > deadline:
+                self.last_play = "no window" if not self.page_open() else "window not listening"
+                return False
+            time.sleep(0.03)
         with self.lock:
             self.audio_id += 1
             self.audio = {"id": self.audio_id, "data": audio}
             self.audio_taken.clear()
+            self.audio_started.clear()
             self.audio_done.clear()
             self.audio_result = {}
+            self.audio_ready.notify_all()
         try:
-            if not self.audio_taken.wait(BROWSER_PICKUP):  # window asleep or closed
+            if not self.audio_taken.wait(BROWSER_PICKUP):
                 self.last_play = "window did not answer"
                 return False
-            limit = time.monotonic() + 10 + len(audio) / 2500
+            start_by = time.monotonic() + START_WAIT
+            while not self.audio_started.wait(0.05):  # taken by a closed window, or held back
+                if self.audio_done.is_set():  # the window said it could not play it
+                    self.last_play = "window refused: " + self.audio_result.get("error", "")
+                    return False
+                if time.monotonic() > start_by:
+                    self.last_play = "window did not start"
+                    return False
+            limit = time.monotonic() + 6 + len(audio) / 4000  # edge-tts mp3 is about 6 kB per second
             while not self.audio_done.wait(0.05):
                 if voice.stop_flag.is_set() or time.monotonic() > limit:
                     self.last_play = "played"
@@ -266,13 +284,48 @@ class App:
             return started
         finally:
             with self.lock:
-                self.audio = None  # the window stops playing when this disappears
+                self.audio = None
+
+    def next_audio(self, after):
+        """Waits (up to AUDIO_WAIT) for a voice piece newer than after. Returns it or None.
+        A newer waiting request replaces an older one, which may belong to a window that is gone."""
+        with self.audio_ready:
+            self.audio_turn += 1
+            turn = self.audio_turn
+            self.audio_waiters = 1
+            self.audio_ready.notify_all()  # older waiters step aside
+            try:
+                self.audio_ready.wait_for(lambda: turn != self.audio_turn or (
+                    self.audio and self.audio["id"] > after and not self.audio_taken.is_set()), AUDIO_WAIT)
+                if turn != self.audio_turn or not self.audio or self.audio["id"] <= after \
+                        or self.audio_taken.is_set():
+                    return None
+                self.audio_taken.set()
+                return self.audio
+            finally:
+                if turn == self.audio_turn:
+                    self.audio_waiters = 0
+
+    def audio_playing(self, data):
+        with self.lock:
+            if self.audio and data.get("id") == self.audio["id"]:
+                self.audio_started.set()
+                return True
+            return False
+
+    def hush(self):
+        """Stop Mira's voice here and in the window."""
+        voice.stop_speaking()
+        with self.lock:
+            self.stops += 1
 
     def audio_finished(self, data):
         with self.lock:
             if not self.audio or data.get("id") != self.audio["id"]:
                 return False
             self.audio_result = {"started": data.get("started") is True, "error": str(data.get("error") or "")[:200]}
+            if self.audio_result["started"]:
+                self.audio_started.set()
             if self.audio_result["error"]:
                 print(f"  [window sound] {self.audio_result['error']}, playing from Python instead")
                 if "NotAllowed" in self.audio_result["error"] and not self.click_told:
@@ -292,7 +345,7 @@ class App:
                 return True
             if self.state == "speaking":
                 self.listen_next = True
-                voice.stop_speaking()
+                self.hush()
                 return True
             if self.state == "thinking":
                 self.listen_next = True
@@ -302,7 +355,7 @@ class App:
     def stop(self):
         self.cancel.set()
         self.listen_next = False
-        voice.stop_speaking()
+        self.hush()
         if self.state == "confirm":
             self.decide(self.ask_id, False)
 
@@ -462,18 +515,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.checked(need_token=False) and self.reply(200, {"app": "mira", "version": VERSION})
         if not self.checked():
             return
-        if url.path == "/api/audio":
-            wanted = parse_qs(url.query).get("id", [""])[0]
-            with self.app.lock:
-                audio = self.app.audio
-                if not audio or str(audio["id"]) != wanted or self.app.audio_done.is_set():
-                    return self.reply(404, {"error": "gone"})
-                self.app.audio_taken.set()
-            return self.reply(200, audio["data"], "audio/mpeg")
+        if url.path == "/api/audio/next":
+            after = parse_qs(url.query).get("after", ["0"])[0]
+            audio = self.app.next_audio(int(after) if after.isdigit() else 0)
+            if not audio:
+                return self.reply(204, b"", "text/plain")
+            return self.reply(200, audio["data"], "audio/mpeg", [("X-Audio-Id", str(audio["id"]))])
         if url.path == "/api/updates":
             query = parse_qs(url.query)
             after = query.get("after", ["0"])[0]
-            self.app.page_visible = query.get("v", ["1"])[0] != "0"
             return self.reply(200, self.app.snapshot(int(after) if after.isdigit() else 0))
         self.reply(404, {"error": "not found"})
 
@@ -518,6 +568,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200 if ok else 409, {"ok": ok})
         if path == "/api/mic":
             return self.reply(200, {"ok": bool(app.mic())})
+        if path == "/api/audio/started":
+            return self.reply(200, {"ok": app.audio_playing(data)})
         if path == "/api/audio/done":
             return self.reply(200, {"ok": app.audio_finished(data)})
         if path == "/api/say":  # "hear it again" on one of Mira's messages
@@ -543,7 +595,7 @@ class Handler(BaseHTTPRequestHandler):
             if "muted" in data:
                 voice.settings["muted"] = bool(data["muted"])
                 if voice.settings["muted"]:
-                    voice.stop_speaking()
+                    app.hush()
             if "convo" in data:
                 app.convo = bool(data["convo"])
             if "wake" in data:
@@ -623,7 +675,9 @@ def launch(url):
     for exe in browsers():
         try:
             subprocess.Popen([exe, f"--app={url}", "--window-size=520,820",
-                              "--autoplay-policy=no-user-gesture-required"])
+                              "--autoplay-policy=no-user-gesture-required",
+                              "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+                              "--disable-backgrounding-occluded-windows"])
             return
         except OSError:
             continue
