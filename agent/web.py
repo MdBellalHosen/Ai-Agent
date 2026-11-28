@@ -105,7 +105,8 @@ class App:
                 "language": self.language, "convo": self.convo, "notice": self.notice,
                 "question": self.question if self.state == "confirm" else None, "ask": self.ask_id,
                 "mic": voice.can_listen(), "wake": self.wake.status if self.wake else "off",
-                "wake_on": self.wake_on, "play": {"id": self.audio["id"]} if self.audio else None,
+                "wake_on": self.wake_on,
+                "play": {"id": self.audio["id"]} if self.audio and not self.audio_done.is_set() else None,
                 "messages": [m for m in self.messages if m["id"] > after and m["private"] == self.private],
             }
 
@@ -465,7 +466,7 @@ class Handler(BaseHTTPRequestHandler):
             wanted = parse_qs(url.query).get("id", [""])[0]
             with self.app.lock:
                 audio = self.app.audio
-                if not audio or str(audio["id"]) != wanted:
+                if not audio or str(audio["id"]) != wanted or self.app.audio_done.is_set():
                     return self.reply(404, {"error": "gone"})
                 self.app.audio_taken.set()
             return self.reply(200, audio["data"], "audio/mpeg")

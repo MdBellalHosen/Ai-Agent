@@ -249,7 +249,7 @@ let last = 0, view = null, picture = null, doc = null, shownNotice = 0, answered
 
 /* ---------- Mira's voice, played here in the window ---------- */
 const Sound = (() => {
-  let current = null, context = null, analyser = null, samples = null;
+  let current = null, context = null, analyser = null, samples = null, finished = 0;
 
   function unlock() {  // after any click the window may play sound and measure it
     try {
@@ -278,6 +278,7 @@ const Sound = (() => {
   }
 
   function finish(id, started, error) {
+    finished = Math.max(finished, id);  // a piece is never played twice
     if (current && current.id === id) {
       if (current.url) URL.revokeObjectURL(current.url);
       current = null; analyser = null;
@@ -287,7 +288,7 @@ const Sound = (() => {
 
   async function play(item) {
     if (!item) { if (current && current.el) current.el.pause(); if (current) current = null; return; }
-    if (current && current.id === item.id) return;
+    if (item.id <= finished || (current && current.id === item.id)) return;
     if (current && current.el) current.el.pause();
     const id = item.id;
     current = { id };
