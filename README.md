@@ -93,7 +93,9 @@ Command Prompt, PowerShell, Registry, uninstall er moto app Mira khole na, nirap
 | Setting | Ki kore |
 | --- | --- |
 | `AGENT_NAME`, `USER_NAME` | Mira r nam, tomake ki bole dakbe |
-| `STT=gemini` | Mic er kotha Gemini lekhe (Bangla e bhalo). `groq` dile Whisper age |
+| `VOICE_MODE=direct` | Gemini tomar voice shune ager kotha mile ekbar e bujhe uttor dey (taratari). `separate` dile age lekha, tarpor uttor |
+| `SILENCE_SECONDS=0.9` | Koto second chup thakle kotha shesh dhorbe. Kotha majhe kete gele 1.2 koro, aro fast chaile 0.7 |
+| `STT=gemini` | `separate` mode e kotha Gemini lekhe. `groq` dile Whisper age |
 | `WAKE_WORD=on` | "Hey Mira". `off` dile bondho |
 | `WEB_PORT=8765` | App er port, onno program er sathe milte gele bodlao |
 | `TRAY=on` | Clock er pashe icon. `off` dile nai |
@@ -131,7 +133,10 @@ Token `data\google_token.json` e thake. Bondho korte file ta muche dao, ar
 2. `data\last_voice.wav` shuno (sorboshesh recording, shudhu ei PC te thake).
 3. Awaj aste ba bhanga hole: Windows **Settings > System > Sound > Input** e volume 80-100 koro,
    mic er kache theke bolo.
-4. Awaj porishkar kintu lekha vul hole `.env` e `STT=groq` diye dekho kon ta bhalo.
+4. Awaj porishkar kintu lekha vul hole `.env` e `VOICE_MODE=separate` ba `STT=groq` diye dekho kon ta bhalo.
+
+Mira r protiti uttor er niche **"x সেকেন্ডে"** lekha thake: tumi chup korar por uttor toiri hote koto shomoy legeche.
+Uttor shuru hoy prothom bakko toiri holei, baki gulo bolar shomoy pichone toiri hoy.
 
 ## Privacy
 

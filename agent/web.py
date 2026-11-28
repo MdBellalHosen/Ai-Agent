@@ -25,6 +25,8 @@ MAX_BODY = 20 * 1024 * 1024
 IDLE_LIMIT = 300  # seconds without a window before the server closes (when wake word is off)
 LANGUAGES = ("bn", "en", "")
 CHIME_DELAY = 0.35  # let the chime finish before recording
+# Gemini hears the voice and answers in one step (faster, understands with context).
+DIRECT_VOICE = config.env("VOICE_MODE", "direct").lower() != "separate"
 
 
 class App:
@@ -45,6 +47,7 @@ class App:
         self.last_seen = time.monotonic()
         self.wake = None
         self.tray = None
+        self.direct_failures = 0
 
     # ---------- shared state ----------
     @property
@@ -142,9 +145,20 @@ class App:
                 self.tell("কিছু শুনতে পাইনি।" + (
                     " মাইকের আওয়াজ খুব কম। Windows Sound settings এ input volume বাড়াও." if loudest < 300 else ""))
                 return
+            wav = voice.wav_bytes(voice.boost(pcm))
+            started = time.monotonic()
+            if not private and DIRECT_VOICE and self.direct_failures < 2:
+                try:
+                    self.heard_and_answer(wav, started)
+                    self.direct_failures = 0
+                    if not (self.convo or self.listen_next):
+                        return
+                    continue
+                except brain.NoVoiceBrain:
+                    self.direct_failures += 1  # after two in a row, use the older way this session
             self.set_state("transcribing")
             try:
-                text = voice.transcribe(voice.wav_bytes(voice.boost(pcm)), self.language, offline_only=private)
+                text = voice.transcribe(wav, self.language, offline_only=private)
             except voice.Offline as err:
                 self.tell(str(err))
                 return
@@ -152,18 +166,33 @@ class App:
                 self.tell("কথা বুঝতে পারিনি, আবার বলো।")
                 return
             self.add("user", text, voice=True)
-            self.reply(text)
+            self.reply(text, spoken=True, started=started)
             if not (self.convo or self.listen_next):
                 return
 
     def on_level(self, level):
         self.level = level
 
-    def reply(self, text, picture=None):
+    def heard_and_answer(self, wav, started):
+        """One step: Gemini hears the recording with the chat so far, and answers."""
         self.set_state("thinking")
         self.used_tools = []
-        answer = brain.ask(text, image=picture, private=self.private)
-        self.add("mira", answer, tools=list(self.used_tools))
+        voice.keep(wav)
+        heard, answer = brain.ask_voice(wav, self.language)
+        self.add("user", heard or "(বুঝতে পারিনি)", voice=True)
+        self.say(answer, started)
+
+    def reply(self, text, picture=None, spoken=False, started=None):
+        self.set_state("thinking")
+        self.used_tools = []
+        answer = brain.ask(text, image=picture, private=self.private, spoken=spoken)
+        self.say(answer, started)
+
+    def say(self, answer, started=None):
+        took = round(time.monotonic() - started, 1) if started else None
+        if took is not None:
+            print(f"  [time] answer ready {took}s after you stopped talking")
+        self.add("mira", answer, tools=list(self.used_tools), took=took)
         if self.cancel.is_set() or voice.settings["muted"] or self.private:
             return
         self.set_state("speaking")

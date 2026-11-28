@@ -27,7 +27,7 @@ NOTES_FILE = DATA / "notes.txt"
 BRAINS = []  # tried in this order
 if GEMINI_KEY:
     BRAINS.append({
-        "name": "gemini", "vision": True, "key": GEMINI_KEY,
+        "name": "gemini", "vision": True, "audio": True, "key": GEMINI_KEY,
         "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "model": env("GEMINI_MODEL", "gemini-3.5-flash-lite"),
     })

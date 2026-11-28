@@ -58,7 +58,6 @@ def mixer():
 def play_mp3(audio):
     pygame = mixer()
     with speak_lock:
-        stop_flag.clear()
         fd, path = tempfile.mkstemp(suffix=".mp3")
         try:
             with os.fdopen(fd, "wb") as f:
@@ -79,15 +78,53 @@ def play_mp3(audio):
                 pass
 
 
+def sentences(text, first=60, size=220):
+    """Short first piece so Mira starts talking fast, then bigger pieces."""
+    parts = [p.strip() for p in re.split(r"(?<=[।?!.:;\n])\s+", clean_text(text)) if p.strip()]
+    chunks, current = [], ""
+    for part in parts:
+        limit = first if not chunks else size
+        if current and len(current) + 1 + len(part) > limit:
+            chunks.append(current)
+            current = part
+        else:
+            current = f"{current} {part}".strip()
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def speak(text):
+    """Plays piece by piece: the next piece is made while the current one plays."""
     if settings["muted"] or settings["private"]:  # private text never goes online
         return
-    try:
-        audio = tts_bytes(text)
+    import queue
+    pieces, ready = sentences(text), queue.Queue(maxsize=2)
+    stop_flag.clear()
+
+    def make():
+        for piece in pieces:
+            if stop_flag.is_set():
+                break
+            try:
+                ready.put(tts_bytes(piece))
+            except Exception as err:
+                print(f"  [voice problem] {err}")
+                break
+        ready.put(None)
+
+    threading.Thread(target=make, daemon=True).start()
+    while not stop_flag.is_set():
+        audio = ready.get()
+        if audio is None:
+            break
         if audio:
-            play_mp3(audio)
-    except Exception as err:
-        print(f"  [voice problem] {err}")
+            try:
+                play_mp3(audio)
+            except Exception as err:
+                print(f"  [voice problem] {err}")
+                break
+    stop_flag.set()  # lets the maker thread finish
 
 
 def stop_speaking():
@@ -135,19 +172,30 @@ def wav_bytes(pcm):
     return buffer.getvalue()
 
 
-def record(finish=None, cancel=None, on_level=None, wait=7.0, limit=30.0, silence=1.2):
+SILENCE = float(config.env("SILENCE_SECONDS", "0.9"))
+
+
+def trim(chunks, voiced, pad=4):
+    """Drop the quiet start and end (keeps 0.2 s around the speech): less to upload."""
+    if not voiced:
+        return b"".join(chunks)
+    return b"".join(chunks[max(0, voiced[0] - pad):voiced[-1] + pad + 1])
+
+
+def record(finish=None, cancel=None, on_level=None, wait=7.0, limit=30.0, silence=None):
     """Record until the speaker goes quiet. Returns (pcm, loudest level).
 
     finish: Event, stop now and keep the audio.  cancel: Event, stop and drop it.
     """
     import sounddevice as sd
-    chunks, floor, heard, quiet, elapsed, loudest = [], None, False, 0.0, 0.0, 0.0
+    silence = SILENCE if silence is None else silence
+    chunks, voiced, floor, heard, quiet, elapsed, loudest = [], [], None, False, 0.0, 0.0, 0.0
     with sd.RawInputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME) as stream:
         while elapsed < limit:
             if cancel is not None and cancel.is_set():
                 return b"", loudest
             if finish is not None and finish.is_set():
-                audio = b"".join(chunks)
+                audio = trim(chunks, voiced)
                 return (audio if len(audio) >= RATE else b""), loudest  # at least 0.5 s
             data, _ = stream.read(FRAME)
             data = bytes(data)
@@ -162,13 +210,14 @@ def record(finish=None, cancel=None, on_level=None, wait=7.0, limit=30.0, silenc
                 continue
             if level > max(220.0, floor * 2.5):
                 heard, quiet = True, 0.0
+                voiced.append(len(chunks) - 1)
             elif heard:
                 quiet += 0.05
                 if quiet >= silence:
                     break
             elif elapsed >= wait:
                 return b"", loudest
-    return (b"".join(chunks) if heard else b""), loudest
+    return (trim(chunks, voiced) if heard else b""), loudest
 
 
 LANGUAGE_NAMES = {"bn": "Bangla", "en": "English"}
@@ -198,10 +247,19 @@ def offline(pcm, language):
     return wake.offline_transcribe(pcm)
 
 
+_clients = {}
+
+
+def client(name, key, url):
+    from openai import OpenAI
+    if (name, key) not in _clients:
+        _clients[(name, key)] = OpenAI(api_key=key, base_url=url, timeout=60, max_retries=1)
+    return _clients[(name, key)]
+
+
 def gemini_transcribe(wav, language):
     """Gemini understands spoken Bangla much better than Whisper."""
     import base64
-    from openai import OpenAI
     expected = LANGUAGE_NAMES.get(language, "Bangla or English")
     instruction = (
         "Write down exactly what the speaker says in this recording. "
@@ -209,9 +267,8 @@ def gemini_transcribe(wav, language):
         "Write Bangla words in Bangla script and English words in English letters. "
         "Do not translate, answer, explain or add anything. "
         "If there is no clear speech, reply with nothing.")
-    client = OpenAI(api_key=config.GEMINI_KEY, timeout=60, max_retries=1,
-                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
-    reply = client.chat.completions.create(
+    gemini = client("gemini", config.GEMINI_KEY, "https://generativelanguage.googleapis.com/v1beta/openai/")
+    reply = gemini.chat.completions.create(
         model=config.env("STT_MODEL", config.env("GEMINI_MODEL", "gemini-3.5-flash-lite")),
         temperature=0,
         messages=[{"role": "user", "content": [
@@ -222,17 +279,25 @@ def gemini_transcribe(wav, language):
 
 
 def whisper_transcribe(wav, language):
-    from openai import OpenAI
-    client = OpenAI(api_key=config.GROQ_KEY, base_url=config.GROQ_URL, timeout=60, max_retries=1)
+    groq = client("groq", config.GROQ_KEY, config.GROQ_URL)
     extra = {}
     if language:
         extra["language"] = language
     if language in HINTS:
         extra["prompt"] = HINTS[language]
-    result = client.audio.transcriptions.create(
+    result = groq.audio.transcriptions.create(
         model="whisper-large-v3", file=("speech.wav", wav), temperature=0, **extra)
     text = result.text.strip()
     return "" if text == HINTS.get(language) else text  # silence sometimes echoes the hint
+
+
+def keep(wav):
+    """Keep only the latest recording, on this PC, to check the mic if words come out wrong."""
+    try:
+        config.DATA.mkdir(exist_ok=True)
+        LAST_RECORDING.write_bytes(wav)
+    except OSError:
+        pass
 
 
 def transcribe(wav, language="bn", offline_only=False):
@@ -242,11 +307,7 @@ def transcribe(wav, language="bn", offline_only=False):
         return offline(pcm_of(wav), language)
     if not can_listen():
         raise RuntimeError("Mic er jonno .env e GEMINI_API_KEY ba GROQ_API_KEY dao.")
-    try:  # keep only the latest recording, on this PC, to check the mic if words come out wrong
-        config.DATA.mkdir(exist_ok=True)
-        LAST_RECORDING.write_bytes(wav)
-    except OSError:
-        pass
+    keep(wav)
     order = [("gemini", config.GEMINI_KEY, gemini_transcribe), ("groq", config.GROQ_KEY, whisper_transcribe)]
     if config.env("STT", "gemini").lower() == "groq":
         order.reverse()
