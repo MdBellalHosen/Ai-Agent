@@ -48,6 +48,7 @@ class App:
         self.wake = None
         self.tray = None
         self.direct_failures = 0
+        self.muted_told = False
 
     # ---------- shared state ----------
     @property
@@ -193,6 +194,9 @@ class App:
         if took is not None:
             print(f"  [time] answer ready {took}s after you stopped talking")
         self.add("mira", answer, tools=list(self.used_tools), took=took)
+        if voice.settings["muted"] and started and not self.muted_told:
+            self.muted_told = True  # once per session
+            self.tell("মিরার ভয়েস বন্ধ আছে। শুনতে চাইলে উপরের স্পিকার বাটনে চাপ দাও।")
         if self.cancel.is_set() or voice.settings["muted"] or self.private:
             return
         self.set_state("speaking")
@@ -274,6 +278,17 @@ class App:
 
     def install(self):
         tools.hooks.update(confirm=self.confirm, announce=self.announce, tool=self.tool_used)
+        voice.problems["report"] = self.tell
+
+    def voice_test(self):
+        if voice.settings["muted"]:
+            self.tell("মিরার ভয়েস বন্ধ আছে। উপরের স্পিকার বাটনে চাপ দিয়ে চালু করো।")
+            return
+        if self.private:
+            self.tell("প্রাইভেট মোডে মিরা ভয়েসে কথা বলে না।")
+            return
+        self.set_state("speaking")
+        voice.speak("হ্যালো! আমি মিরা। আমার কথা শুনতে পাচ্ছ?")
 
     def start_wake(self):
         if wake.enabled() and wake.installed():
@@ -392,6 +407,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200 if ok else 409, {"ok": ok})
         if path == "/api/mic":
             return self.reply(200, {"ok": bool(app.mic())})
+        if path == "/api/voicetest":
+            return self.reply(200 if app.start("speaking", app.voice_test) else 409, {"ok": True})
         if path == "/api/stop":
             app.stop()
             return self.reply(200, {"ok": True})
@@ -491,6 +508,7 @@ def serve(open_window=True, port=None):
     app.install()
     app.start_wake()
     apps.preload()
+    threading.Thread(target=lambda: (brain.warm_up(), voice.warm_up()), daemon=True).start()
     app.tray = tray.start(app, server, launch)
     print(f"{config.NAME} cholche: {url}")
     print("Wake word:", "on (Hey Mira)" if app.wake else "off")

@@ -7,6 +7,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 import wave
 
 from . import config
@@ -55,8 +56,23 @@ def mixer():
     return pygame
 
 
+problems = {"report": None}  # the app shows voice problems instead of staying silent
+
+
+def report(message):
+    print(f"  [voice problem] {message}")
+    if problems["report"]:
+        problems["report"](message)
+
+
 def play_mp3(audio):
-    pygame = mixer()
+    try:
+        pygame = mixer()
+    except Exception as err:
+        if os.name != "nt":
+            raise
+        print(f"  [pygame problem] {err}, using Windows player")
+        return play_windows(audio)
     with speak_lock:
         fd, path = tempfile.mkstemp(suffix=".mp3")
         try:
@@ -94,6 +110,62 @@ def sentences(text, first=60, size=220):
     return chunks
 
 
+def play_windows(audio, kind="mp3"):
+    """Backup player built into Windows (MCI), used when pygame cannot open the sound card."""
+    import ctypes
+    mci = ctypes.windll.winmm.mciSendStringW
+    with speak_lock:
+        fd, path = tempfile.mkstemp(suffix="." + kind)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(audio)
+            kind_name = "mpegvideo" if kind == "mp3" else "waveaudio"
+            if mci(f'open "{path}" type {kind_name} alias mira', None, 0, None):
+                raise RuntimeError("Windows could not open the sound")
+            mci("play mira", None, 0, None)
+            status = ctypes.create_unicode_buffer(32)
+            while not stop_flag.is_set():
+                mci("status mira mode", status, 32, None)
+                if status.value != "playing":
+                    break
+                time.sleep(0.05)
+            mci("close mira", None, 0, None)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+def windows_voice(text):
+    """Offline backup voice (Windows' own English voice) when the online voice fails."""
+    script = ("Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+              "$f = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Gender -eq 'Female' } | Select-Object -First 1; "
+              "if ($f) { $s.SelectVoice($f.VoiceInfo.Name) }; $s.SetOutputToWaveFile($env:MIRA_WAV); "
+              "$s.Speak([Console]::In.ReadToEnd()); $s.Dispose()")
+    fd, path = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    try:
+        import subprocess
+        subprocess.run(["powershell", "-NoProfile", "-Command", "[Console]::InputEncoding=[Text.Encoding]::UTF8; " + script],
+                       input=text.encode("utf-8"), env={**os.environ, "MIRA_WAV": path}, timeout=60, check=True,
+                       capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        with open(path, "rb") as f:
+            audio = f.read()
+    finally:
+        os.remove(path)
+    play_windows(audio, "wav")
+
+
+def warm_up():
+    """Load the voice parts before the first answer, so it starts faster."""
+    try:
+        import edge_tts  # noqa: F401
+        mixer()
+    except Exception as err:
+        print(f"  [voice warm up] {err}")
+
+
 def speak(text):
     """Plays piece by piece: the next piece is made while the current one plays."""
     if settings["muted"] or settings["private"]:  # private text never goes online
@@ -102,6 +174,8 @@ def speak(text):
     pieces, ready = sentences(text), queue.Queue(maxsize=2)
     stop_flag.clear()
 
+    failed = []
+
     def make():
         for piece in pieces:
             if stop_flag.is_set():
@@ -109,7 +183,7 @@ def speak(text):
             try:
                 ready.put(tts_bytes(piece))
             except Exception as err:
-                print(f"  [voice problem] {err}")
+                failed.append(err)
                 break
         ready.put(None)
 
@@ -122,8 +196,17 @@ def speak(text):
             try:
                 play_mp3(audio)
             except Exception as err:
-                print(f"  [voice problem] {err}")
+                report(f"ভয়েস বাজাতে সমস্যা: {err}")
                 break
+    if failed and not stop_flag.is_set():
+        english = not re.search(r"[\u0980-\u09FF]", text)
+        if os.name == "nt" and english:
+            try:
+                windows_voice(clean_text(text))
+            except Exception as err:
+                report(f"ভয়েস তৈরি হয়নি: {err}")
+        else:
+            report(f"ভয়েস তৈরি হয়নি (ইন্টারনেট দেখো): {failed[0]}")
     stop_flag.set()  # lets the maker thread finish
 
 
