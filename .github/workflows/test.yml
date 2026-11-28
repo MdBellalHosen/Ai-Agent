@@ -40,3 +40,23 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           .venv\Scripts\python -c "from agent import apps, tools; found = apps.installed(); print(len(found), 'apps'); assert found; print(apps.find('edge'), apps.find('notepad')); print(apps.open_app('powershell')); print(tools.math_solve('solve', 'x^2-5x+6=0')); print(tools.math_solve('integrate', 'x^2', lower='0', upper='3'))"
+      - name: Phase 3-5 on Windows (tray, PDF, clipboard, web info)
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          .venv\Scripts\python -c "import pystray, pypdf, googleapiclient, google_auth_oauthlib; from agent import shortcut; print('icon', shortcut.icon_image().size)"
+          .venv\Scripts\python -c "from agent import files; files.copy_to_clipboard('আমি ভাত খাই'); print('clipboard', files.read_clipboard())"
+          .venv\Scripts\python -c "from agent import info; print(info.weather()); print(info.news(count=3)); print(info.wikipedia('Dhaka', 'en')[:200])"
+      - name: Offline English speech and "Hey Mira" (Windows voice, Vosk)
+        continue-on-error: true
+        env:
+          PYTHONUTF8: "1"
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
+          foreach ($pair in @(@("wake.wav", "hey mira"), @("talk.wav", "open the notepad app"))) {
+            $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+            $s.SetOutputToWaveFile($pair[0], $fmt); $s.Speak($pair[1]); $s.Dispose()
+          }
+          .venv\Scripts\python -c "import json, wave, vosk; from agent import wake; pcm = lambda f: wave.open(f).readframes(10**7); print('offline:', wake.offline_transcribe(pcm('talk.wav'))); r = vosk.KaldiRecognizer(wake.model(), 16000, json.dumps(wake.GRAMMAR)); r.SetWords(True); r.AcceptWaveform(pcm('wake.wav')); res = json.loads(r.FinalResult()); print('wake:', res.get('text'), wake.is_wake(res))"

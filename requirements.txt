@@ -7,3 +7,7 @@ pyautogui
 pillow
 vosk
 sympy
+pystray
+pypdf
+google-api-python-client
+google-auth-oauthlib

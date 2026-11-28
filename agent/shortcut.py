@@ -25,6 +25,11 @@ if (Test-Path $path) { Remove-Item $path }
 
 
 def make_icon():
+    config.DATA.mkdir(exist_ok=True)
+    icon_image().save(ICON, sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+
+
+def icon_image():
     from PIL import Image, ImageDraw, ImageFont
     size = 256
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -38,8 +43,7 @@ def make_icon():
     except OSError:
         font = ImageFont.load_default(150)
     draw.text((size / 2, size / 2 + 6), config.NAME[:1].upper(), font=font, fill="white", anchor="mm")
-    config.DATA.mkdir(exist_ok=True)
-    img.save(ICON, sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    return img
 
 
 def powershell(script, **values):

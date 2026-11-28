@@ -36,8 +36,9 @@ if GROQ_KEY:
         "name": "groq", "vision": False, "key": GROQ_KEY, "url": GROQ_URL,
         "model": env("GROQ_MODEL", "openai/gpt-oss-120b"),
     })
-BRAINS.append({
-    "name": "ollama", "vision": True, "key": "ollama",
+OLLAMA_MODEL = env("OLLAMA_MODEL", "gemma3:1b")
+BRAINS.append({  # gemma3:1b and other tiny models cannot see pictures
+    "name": "ollama", "vision": not any(t in OLLAMA_MODEL for t in (":1b", ":270m")), "key": "ollama",
     "url": "http://localhost:11434/v1",
-    "model": env("OLLAMA_MODEL", "gemma4:e2b"),
+    "model": OLLAMA_MODEL,
 })

@@ -14,7 +14,7 @@ import urllib.parse
 import webbrowser
 from pathlib import Path
 
-from . import apps, voice
+from . import apps, daily, files, google, info, study, voice
 from .calculator import calculate
 from .memory import add_note, read_notes, remember
 
@@ -180,6 +180,43 @@ TOOL_LIST = [
                                           "integrate", "limit", "evaluate"]},
          expression=S, variable=S, lower=S, upper=S, point=S, order=N),
 ]
+B = {"type": "boolean"}
+CARDS = {"type": "array", "items": {"type": "object", "required": ["front", "back"],
+                                    "properties": {"front": S, "back": S}}}
+LANG = {"type": "string", "enum": ["bn", "en"]}
+TOOL_LIST += [
+    # Phase 4
+    tool(files.read_document, "Read a PDF or text file (from Desktop, Documents, Downloads, or one the user "
+         "attached) a few pages at a time, for summaries, questions or study help",
+         ["name"], name=S, start_page=N, pages=N),
+    tool(files.read_clipboard, "Read the text the user copied (Ctrl+C), only when they ask, e.g. to translate it"),
+    tool(files.copy_to_clipboard, "Put text on the clipboard so the user can paste it", ["text"], text=S),
+    tool(files.organize_folder, "Tidy Desktop, Documents or Downloads: move loose files into type folders. "
+         "Asks the user first", folder={"type": "string", "enum": ["Downloads", "Desktop", "Documents"]}),
+    tool(files.undo_organize, "Put back the files moved by the last organize_folder"),
+    tool(daily.daily_briefing, "Today's briefing: date, weather, calendar, unread email, study cards, notes, news"),
+    # Phase 5
+    tool(info.weather, "Weather now and the next days. City default is the user's city", city=S),
+    tool(info.news, "Latest news headlines in Bangladesh, optionally about a topic",
+         topic=S, language=LANG, count=N),
+    tool(info.wikipedia, "Short factual summary of a topic from Wikipedia", ["query"], query=S, language=LANG),
+    tool(google.unread_emails, "Newest unread Gmail emails (read only)", count=N),
+    tool(google.search_emails, "Search Gmail, e.g. 'from:teacher newer_than:7d' (read only)",
+         ["query"], query=S, count=N),
+    tool(google.calendar_events, "Google Calendar events from now for N days (read only)", days=N),
+    tool(study.add_flashcards, "Save flashcards (question and answer) in a deck for later review",
+         ["deck", "cards"], deck=S, cards=CARDS),
+    tool(study.next_flashcards, "Flashcards due today for a quiz", deck=S, count=N),
+    tool(study.grade_flashcard, "After the user answers a flashcard, record if they were right",
+         ["card_id", "correct"], card_id=N, correct=B),
+    tool(study.list_decks, "List flashcard decks and how many are due"),
+    tool(study.log_mood, "Save today's mood (1 very bad to 5 very good) in the private diary, only if the user "
+         "wants it saved", ["score"], score=N, note=S),
+    tool(study.mood_summary, "Summary of the mood diary for the last N days", days=N),
+]
+FUNCTIONS = {name: func for name, func, _ in TOOL_LIST}
+SCHEMAS = [schema for _, _, schema in TOOL_LIST]
+
 # Pure math tools: allowed even when a picture is attached, they cannot touch the PC.
 SAFE_WITH_IMAGE = {"calculate", "math_solve"}
 FUNCTIONS = {name: func for name, func, _ in TOOL_LIST}

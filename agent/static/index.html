@@ -108,13 +108,15 @@ textarea:focus { outline: none; }
   <button class="icon" id="menuBtn" title="আরও"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
 </header>
 <div class="menu" id="menu">
+  <button id="briefBtn">আজকের ব্রিফিং</button>
+  <button id="cardsBtn">ফ্ল্যাশকার্ড পড়া</button>
   <button id="clearBtn">নতুন করে কথা শুরু</button>
   <button id="quitBtn">মিরা বন্ধ করো</button>
 </div>
 <div class="banner">প্রাইভেট মোড: কথা শুধু এই পিসির Ollama তে যাবে। মাইক আর ভয়েস বন্ধ।</div>
 
 <main id="chat">
-  <div class="empty" id="empty"><b>হ্যালো!</b>মাইকে চাপ দিয়ে কথা বলো, অথবা নিচে লিখে পাঠাও।<br>যেমন: "WhatsApp খোলো", "x² − 5x + 6 = 0 সমাধান করো"</div>
+  <div class="empty" id="empty"><b>হ্যালো!</b>মাইকে চাপ দিয়ে কথা বলো, অথবা নিচে লিখে পাঠাও।<br>যেমন: "WhatsApp খোলো", "x² − 5x + 6 = 0 সমাধান করো", "আজকের আবহাওয়া কেমন?", "Downloads গুছিয়ে দাও"</div>
   <div class="typing" id="typing">ভাবছি...</div>
 </main>
 
@@ -125,14 +127,14 @@ textarea:focus { outline: none; }
     <div class="side"><button class="stop" id="stopBtn">থামাও</button></div>
   </div>
   <div class="hint" id="hint"></div>
-  <div class="preview" id="preview"><img id="previewImg" alt=""><span>ছবি যোগ হয়েছে</span><button class="icon" id="removeImg" title="ছবি বাদ দাও"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+  <div class="preview" id="preview"><img id="previewImg" alt=""><span id="previewText">ছবি যোগ হয়েছে</span><button class="icon" id="removeImg" title="ছবি বাদ দাও"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
   <div class="compose">
-    <button class="icon" id="imageBtn" title="ছবি যোগ করো (Ctrl+V দিয়েও হবে)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></button>
+    <button class="icon" id="imageBtn" title="ছবি বা PDF যোগ করো (Ctrl+V, drag দিয়েও হবে)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></button>
     <button class="icon" id="screenBtn" title="স্ক্রিন দেখাও"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
     <textarea id="input" rows="1" placeholder="এখানে লেখো..."></textarea>
     <button class="icon send" id="sendBtn" title="পাঠাও"><svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
   </div>
-  <input type="file" id="file" accept="image/*" hidden>
+  <input type="file" id="file" accept="image/*,.pdf,.txt,.md,.csv" hidden>
 </footer>
 
 <div class="dialog" id="dialog">
@@ -151,8 +153,14 @@ const STATUS = { idle: "তৈরি", listening: "শুনছি... বলা 
 const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "ওয়েবসাইট", web_search: "সার্চ", volume: "ভলিউম",
   take_screenshot: "স্ক্রিনশট", find_file: "ফাইল খোঁজা", lock_pc: "পিসি লক", shutdown_pc: "শাটডাউন",
   add_note: "নোট", read_notes: "নোট পড়া", remember: "মনে রাখা", set_reminder: "রিমাইন্ডার", calculate: "হিসাব",
-  math_solve: "অঙ্ক যাচাই", list_apps: "অ্যাপ খোঁজা", save_nickname: "অ্যাপের নাম সেভ" };
-let last = 0, view = null, picture = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
+  math_solve: "অঙ্ক যাচাই", list_apps: "অ্যাপ খোঁজা", save_nickname: "অ্যাপের নাম সেভ",
+  read_document: "ফাইল পড়া", read_clipboard: "ক্লিপবোর্ড", copy_to_clipboard: "কপি করা হয়েছে",
+  organize_folder: "ফোল্ডার গোছানো", undo_organize: "আগের মতো করা", daily_briefing: "ব্রিফিং",
+  weather: "আবহাওয়া", news: "খবর", wikipedia: "উইকিপিডিয়া", unread_emails: "ইমেইল",
+  search_emails: "ইমেইল খোঁজা", calendar_events: "ক্যালেন্ডার", add_flashcards: "ফ্ল্যাশকার্ড সেভ",
+  next_flashcards: "ফ্ল্যাশকার্ড", grade_flashcard: "ফ্ল্যাশকার্ড", list_decks: "ফ্ল্যাশকার্ড",
+  log_mood: "মুড ডায়েরি", mood_summary: "মুড ডায়েরি" };
+let last = 0, view = null, picture = null, doc = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
 
 async function api(path, body) {
   const options = { headers: { "X-Token": TOKEN } };
@@ -174,6 +182,7 @@ function addMessage(m) {
   const tags = [];
   if (m.voice) tags.push("মাইক থেকে");
   if (m.image) tags.push(m.screen ? "স্ক্রিন সহ" : "ছবি সহ");
+  if (m.document) tags.push("ফাইল: " + m.document);
   (m.tools || []).forEach(t => tags.push(TOOLS[t] || t));
   if (tags.length) { const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = tags.join(" · "); div.appendChild(tag); }
   $("chat").insertBefore(div, $("typing"));
@@ -221,20 +230,31 @@ async function poll() {
 
 async function send() {
   const text = $("input").value.trim();
-  if (!text && !picture) return;
-  const res = await api("/api/send", { text, image: picture });
+  if (!text && !picture && !doc) return;
+  const res = await api("/api/send", { text, image: picture, document: doc });
   if (res.ok) { $("input").value = ""; grow(); setPicture(null); }
   else if (!res.error) hint("একটু অপেক্ষা করো, আগের কাজ চলছে।", true);
 }
 
-function setPicture(url) {
-  picture = url;
+function setPicture(url, name) {
+  picture = name ? null : url;
+  doc = name ? { name, data: url } : null;
   $("preview").classList.toggle("show", !!url);
-  if (url) $("previewImg").src = url;
+  $("previewImg").style.display = name ? "none" : "";
+  $("previewText").textContent = name ? "ফাইল: " + name : "ছবি যোগ হয়েছে";
+  if (url && !name) $("previewImg").src = url;
 }
 
 function loadPicture(file) {
-  if (!file || !file.type.startsWith("image/")) return;
+  if (!file) return;
+  if (/\.(pdf|txt|md|csv)$/i.test(file.name)) {
+    if (file.size > 14 * 1024 * 1024) { hint("ফাইলটা অনেক বড় (১৪ MB এর বেশি)।", true); return; }
+    const reader = new FileReader();
+    reader.onload = () => setPicture(reader.result, file.name);
+    reader.readAsDataURL(file);
+    return;
+  }
+  if (!file.type.startsWith("image/")) return;
   const img = new Image();
   img.onload = () => {
     const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
@@ -276,6 +296,8 @@ $("yesBtn").addEventListener("click", () => answer(true));
 $("noBtn").addEventListener("click", () => answer(false));
 $("menuBtn").addEventListener("click", e => { e.stopPropagation(); $("menu").classList.toggle("show"); });
 document.addEventListener("click", () => $("menu").classList.remove("show"));
+$("briefBtn").addEventListener("click", () => api("/api/send", { text: "আজকের ব্রিফিং দাও।" }));
+$("cardsBtn").addEventListener("click", () => api("/api/send", { text: "আজকের ফ্ল্যাশকার্ড দিয়ে আমাকে কুইজ নাও।" }));
 $("clearBtn").addEventListener("click", async () => {
   const res = await api("/api/clear", {});
   if (res.ok) { document.querySelectorAll(".msg").forEach(e => e.remove()); $("empty").style.display = ""; }
