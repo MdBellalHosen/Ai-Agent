@@ -14,7 +14,7 @@ import urllib.parse
 import webbrowser
 from pathlib import Path
 
-from . import apps, control, daily, files, google, info, study, voice
+from . import apps, control, daily, files, google, info, screen, study, voice
 from .calculator import calculate
 from .memory import add_note, read_notes, remember
 
@@ -235,6 +235,24 @@ TOOL_LIST += [
     tool(control.open_folder, "Open a folder: This PC, Desktop, Documents, Downloads, Pictures, Music, Videos",
          ["name"], name=S),
     tool(control.sleep_pc, "Put the PC to sleep. Asks the user first"),
+    # Seeing and clicking
+    tool(screen.look_at_screen, "Look at the screen now and describe it (use before clicking, and after, to check)",
+         question=S),
+    tool(screen.click_on, "Click something on screen by describing it, e.g. 'the Search box', "
+         "'the first YouTube video', 'Save button'. double for double click, button right for right click",
+         ["target"], target=S, button={"type": "string", "enum": ["left", "right"]}, double=B),
+    tool(screen.list_windows, "List the open windows"),
+    tool(screen.switch_to, "Bring an open window to the front by part of its title", ["name"], name=S),
+    # Files and settings
+    tool(control.open_settings, "Open a Windows Settings page", ["page"],
+         page={"type": "string", "enum": list(control.SETTINGS)}),
+    tool(control.file_action, "Work with files and folders in Desktop, Documents, Downloads, Pictures, Music, "
+         "Videos: create_folder, rename (target = new name), move or copy (target = folder), delete "
+         "(to the Recycle Bin, asks first). Paths like 'Downloads\\cv.pdf'", ["action", "path"],
+         action={"type": "string", "enum": ["create_folder", "rename", "move", "copy", "delete"]},
+         path=S, target=S),
+    tool(control.open_file, "Open a document, photo, song or video with its normal app", ["name"], name=S),
+    tool(control.list_folder, "List what is in a folder, newest first", name=S),
     # WhatsApp
     tool(control.whatsapp_message, "Send a WhatsApp message to a saved contact name or a phone number. "
          "Asks the user first", ["to", "message"], to=S, message=S),

@@ -8,6 +8,7 @@ from .tools import SAFE_WITH_IMAGE, SCHEMAS, run_tool
 
 
 _clients = {}
+MAX_STEPS = 15  # tool rounds per message, enough for look-click-type tasks
 
 
 def make_client(brain):
@@ -75,9 +76,12 @@ can talk. Never say you can only write text or cannot speak.
 
 Mood diary: you may offer once to save the user's mood, but only call log_mood if they agree.
 
-PC control: you can press keys, type, manage windows and tabs, control music, open folders and
-apps, close apps and check the battery. Do what the user asks step by step and say briefly
-what you did. WhatsApp: use whatsapp_message; if the number is not saved, ask the user for it
+PC control: you can see the screen, click things, press keys, type, switch windows and tabs,
+control music, open apps, files, folders and Settings, and move, copy, rename or delete files.
+For a task on screen: look_at_screen, act (click_on, type_text, press_keys), then look again
+to check, step by step until it is done. Keys and typing go to the app the user was using
+before talking to you. Before anything that sends, deletes, buys, pays or installs, make sure
+the user asked for exactly that. Say briefly what you did. WhatsApp: use whatsapp_message; if the number is not saved, ask the user for it
 and save it with save_contact first. Write the message exactly as the user wants it sent.
 
 Tools: use them only when the user asks for an action. Never claim an action was done
@@ -168,7 +172,7 @@ def chat(brains, content, private, image=False, spoken=False):
         used_tools = False
         try:
             client = make_client(brain)
-            for _ in range(5):
+            for _ in range(MAX_STEPS):
                 # With a picture only math tools are offered, so text inside it cannot act.
                 offered = [t for t in SCHEMAS if not image or t["function"]["name"] in SAFE_WITH_IMAGE]
                 extra = {} if private else {"tools": offered}
