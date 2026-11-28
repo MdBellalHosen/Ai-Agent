@@ -47,8 +47,8 @@ Tarpor `.env` e `OLLAMA_MODEL=gemma3:1b`.
 | Button | Ki hoy |
 | --- | --- |
 | "Hey Mira" | Chhoto tone baje, window khule, shathe shathe shune |
-| Boro mic | Kotha bolo. Chup korle nije thame, abar chaple sathe sathe shesh |
-| Mira bolar shomoy mic | Thamiye tomar kotha shune |
+| Majher rongin gol (orb) | Chap dao, kotha bolo. Chup korle nije thame, abar chaple sathe sathe shesh |
+| Mira bolar shomoy orb e chap | Thamiye tomar kotha shune |
 | একটানা কথা | Uttor er por nije abar shune, call er moto |
 | থামাও / Esc | Sob thamao |
 | বাংলা / English / Auto | Tumi kon vashay kotha bolbe |
@@ -59,6 +59,10 @@ Tarpor `.env` e `OLLAMA_MODEL=gemma3:1b`.
 | `⋮` | Aajker briefing, flashcard quiz, notun kore shuru, Mira bondho |
 | Clock er pashe **M** icon | Kholo, kotha bolo, private, voice bondho, Mira bondho |
 | Ctrl+Space | Mic |
+
+Orb dekhe bojha jay Mira ki korche: chup thakle dhire nishshash er moto nore, shunar shomoy
+tomar awaj er sathe dheu chhoray, bhabar shomoy kinara diye rekha ghore, bolar shomoy dhukpuk kore.
+Private mode e nil-sobuj hoy. Windows e "animation bondho" setting on thakle orb thir thake.
 
 Shutdown, restart ar website kholar age window e **হ্যাঁ, করো** button chapte hoy.
 Voice diye eta approve kora jay na.
