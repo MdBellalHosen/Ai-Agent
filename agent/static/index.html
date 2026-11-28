@@ -184,6 +184,7 @@ function addMessage(m) {
   if (m.image) tags.push(m.screen ? "স্ক্রিন সহ" : "ছবি সহ");
   if (m.document) tags.push("ফাইল: " + m.document);
   (m.tools || []).forEach(t => tags.push(TOOLS[t] || t));
+  if (m.took) tags.push(m.took + " সেকেন্ডে");
   if (tags.length) { const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = tags.join(" · "); div.appendChild(tag); }
   $("chat").insertBefore(div, $("typing"));
   div.scrollIntoView({ block: "end", behavior: "smooth" });

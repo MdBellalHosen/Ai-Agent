@@ -13,10 +13,16 @@ WEATHER = {0: "clear sky", 1: "mostly clear", 2: "partly cloudy", 3: "cloudy", 4
            95: "thunderstorm", 96: "thunderstorm with hail", 99: "thunderstorm with hail"}
 
 
-def fetch(url, timeout=15):
+def fetch(url, timeout=12, tries=2):
+    """Slow sites get one more try."""
     request = urllib.request.Request(url, headers={"User-Agent": "Mira-assistant/1.0"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    for attempt in range(tries):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except (OSError, TimeoutError):
+            if attempt == tries - 1:
+                raise
 
 
 def get_json(url, **params):

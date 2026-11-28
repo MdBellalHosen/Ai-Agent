@@ -40,12 +40,17 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           .venv\Scripts\python -c "from agent import apps, tools; found = apps.installed(); print(len(found), 'apps'); assert found; print(apps.find('edge'), apps.find('notepad')); print(apps.open_app('powershell')); print(tools.math_solve('solve', 'x^2-5x+6=0')); print(tools.math_solve('integrate', 'x^2', lower='0', upper='3'))"
-      - name: Phase 3-5 on Windows (tray, PDF, clipboard, web info)
+      - name: Phase 3-5 on Windows (tray, PDF, clipboard)
         env:
           PYTHONUTF8: "1"
         run: |
           .venv\Scripts\python -c "import pystray, pypdf, googleapiclient, google_auth_oauthlib; from agent import shortcut; print('icon', shortcut.icon_image().size)"
           .venv\Scripts\python -c "from agent import files; files.copy_to_clipboard('আমি ভাত খাই'); print('clipboard', files.read_clipboard())"
+      - name: Web info (outside websites, may be slow)
+        continue-on-error: true
+        env:
+          PYTHONUTF8: "1"
+        run: |
           .venv\Scripts\python -c "from agent import info; print(info.weather()); print(info.news(count=3)); print(info.wikipedia('Dhaka', 'en')[:200])"
       - name: Offline English speech and "Hey Mira" (Windows voice, Vosk)
         continue-on-error: true

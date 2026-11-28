@@ -100,6 +100,7 @@ class RecordTests(unittest.TestCase):
                 mock.patch.object(config, "DATA", Path(folder)), \
                 mock.patch.object(voice, "LAST_RECORDING", Path(folder, "last.wav")), \
                 mock.patch.dict(os.environ, env), mock.patch.dict(sys.modules, {"openai": openai}), \
+                mock.patch.dict(voice._clients, clear=True), \
                 mock.patch("builtins.print"):
             text = voice.transcribe(b"wav", "bn")
             self.assertEqual(Path(folder, "last.wav").read_bytes(), b"wav")
@@ -223,7 +224,7 @@ class ChatTests(Base):
         with mock.patch.object(brain, "ask", return_value="ভালো আছি") as ask:
             self.assertEqual(self.request("POST", "/api/send", {"text": "কেমন আছো?"})[0], 200)
             self.wait_idle()
-        ask.assert_called_once_with("কেমন আছো?", image=None, private=False)
+        ask.assert_called_once_with("কেমন আছো?", image=None, private=False, spoken=False)
         self.assertEqual([(m["role"], m["text"]) for m in self.updates()["messages"]],
                          [("user", "কেমন আছো?"), ("mira", "ভালো আছি")])
         self.speak.assert_called_once_with("ভালো আছি")
@@ -241,7 +242,7 @@ class ChatTests(Base):
         self.assertTrue(ask.call_args.kwargs["image"].startswith("data:image/jpeg;base64,"))
 
     def test_risky_action_needs_a_click(self):
-        def ask(text, image=None, private=False):
+        def ask(text, image=None, private=False, spoken=False):
             return "allowed" if tools.confirm("Shut down the PC?") else "stopped"
 
         with mock.patch.object(brain, "ask", side_effect=ask):
