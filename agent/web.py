@@ -21,6 +21,19 @@ from . import apps, brain, config, files, screen, tools, tray, voice, wake
 from .vision import image_url
 
 PAGE = Path(__file__).with_name("static") / "index.html"
+
+
+def code_version():
+    """Changes whenever Mira's code changes (after git pull), so an old copy can be replaced."""
+    import hashlib
+    digest = hashlib.sha1()
+    folder = Path(__file__).parent
+    for path in sorted([*folder.glob("*.py"), PAGE]):
+        digest.update(path.name.encode() + path.read_bytes())
+    return digest.hexdigest()[:10]
+
+
+VERSION = code_version()
 MAX_BODY = 20 * 1024 * 1024
 IDLE_LIMIT = 300  # seconds without a window before the server closes (when wake word is off)
 LANGUAGES = ("bn", "en", "")
@@ -53,6 +66,7 @@ class App:
         self.wake_on = True  # the menu can pause "Hey Mira" for this session
         self.page_visible = True
         self.click_told = False
+        self.last_play = ""
         self.via_wake = False
         # Mira's voice is played by the window itself (the browser's sound always works).
         self.audio, self.audio_id = None, 0
@@ -219,7 +233,11 @@ class App:
 
     def browser_play(self, audio):
         """Plays one piece in the window. False means the window could not, so Python plays it."""
-        if not (self.page_open() and self.page_visible):  # minimized windows play late
+        if not self.page_open():
+            self.last_play = "no window"
+            return False
+        if not self.page_visible:  # minimized windows play late
+            self.last_play = "window hidden"
             return False
         with self.lock:
             self.audio_id += 1
@@ -229,12 +247,16 @@ class App:
             self.audio_result = {}
         try:
             if not self.audio_taken.wait(BROWSER_PICKUP):  # window asleep or closed
+                self.last_play = "window did not answer"
                 return False
             limit = time.monotonic() + 10 + len(audio) / 2500
             while not self.audio_done.wait(0.05):
                 if voice.stop_flag.is_set() or time.monotonic() > limit:
+                    self.last_play = "played"
                     return True
-            return bool(self.audio_result.get("started"))
+            started = bool(self.audio_result.get("started"))
+            self.last_play = "played" if started else "window refused: " + self.audio_result.get("error", "")
+            return started
         finally:
             with self.lock:
                 self.audio = None  # the window stops playing when this disappears
@@ -332,14 +354,35 @@ class App:
         voice.problems["report"] = self.tell
 
     def voice_test(self):
+        """Says a test line and writes down each step, so a problem shows where it is."""
+        line = "হ্যালো! আমি মিরা। আমার কথা শুনতে পাচ্ছ?"
+        steps = [f"মিরার ভার্সন: {VERSION}"]
         if voice.settings["muted"]:
-            self.tell("মিরার ভয়েস বন্ধ আছে। উপরের স্পিকার বাটনে চাপ দিয়ে চালু করো।")
-            return
-        if self.private:
-            self.tell("প্রাইভেট মোডে মিরা ভয়েসে কথা বলে না।")
-            return
-        self.set_state("speaking")
-        voice.speak("হ্যালো! আমি মিরা। আমার কথা শুনতে পাচ্ছ?", player=self.browser_play)
+            steps.append("ভয়েস: বন্ধ। উপরের স্পিকার বাটনে চাপ দিয়ে চালু করো।")
+        elif self.private:
+            steps.append("ভয়েস: প্রাইভেট মোডে মিরা ভয়েসে বলে না।")
+        else:
+            self.set_state("speaking")
+            began = time.monotonic()
+            try:
+                audio = voice.tts_bytes(line)
+                steps.append(f"ভয়েস তৈরি (Microsoft): ঠিক আছে, {time.monotonic() - began:.1f} সেকেন্ড")
+            except Exception as err:
+                audio = None
+                steps.append(f"ভয়েস তৈরি (Microsoft): হয়নি, {err}. ইন্টারনেট দেখো।")
+            if audio:
+                self.last_play = ""
+                if self.browser_play(audio):
+                    steps.append("জানালা থেকে বাজানো: ঠিক আছে")
+                else:
+                    steps.append(f"জানালা থেকে বাজানো: হয়নি ({self.last_play})")
+                    try:
+                        voice.play_mp3(audio)
+                        steps.append("Python থেকে বাজানো: ঠিক আছে")
+                    except Exception as err:
+                        steps.append(f"Python থেকে বাজানো: হয়নি, {err}")
+        steps.append("শুনতে না পেলে Windows এর ভলিউম আর কোন স্পিকার বাছা আছে দেখো।")
+        self.add("mira", "ভয়েস পরীক্ষা\n" + "\n".join(steps))
 
     def start_wake(self):
         if wake.enabled() and wake.installed():
@@ -409,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, page.encode(), "text/html; charset=utf-8",
                               [("Content-Security-Policy", policy)])
         if url.path == "/api/ping":
-            return self.checked(need_token=False) and self.reply(200, {"app": "mira"})
+            return self.checked(need_token=False) and self.reply(200, {"app": "mira", "version": VERSION})
         if not self.checked():
             return
         if url.path == "/api/audio":
@@ -520,11 +563,36 @@ def make_server(port):
 
 
 def running(url):
+    """The Mira already answering on this port: {"app": "mira", "version": ...}, or None."""
     try:
         with urllib.request.urlopen(url + "api/ping", timeout=2) as response:
-            return json.load(response).get("app") == "mira"
+            info = json.load(response)
+            return info if info.get("app") == "mira" else None
     except Exception:
+        return None
+
+
+def stop_old(port):
+    """Ends an older Mira still running on this port (often the one started with Windows)."""
+    if os.name != "nt":
         return False
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    listing = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True,
+                             timeout=15, creationflags=flags).stdout
+    pids = {line.split()[-1] for line in listing.splitlines()
+            if f"127.0.0.1:{port} " in line and "LISTENING" in line}
+    stopped = False
+    for pid in pids:
+        image = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True,
+                               text=True, timeout=15, creationflags=flags).stdout.lower()
+        if "python" in image and int(pid) != os.getpid():  # only an old Mira, never another program
+            subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=15, creationflags=flags)
+            stopped = True
+    for _ in range(25):
+        if not running(f"http://127.0.0.1:{port}/"):
+            return stopped
+        time.sleep(0.2)
+    return False
 
 
 def browsers():
@@ -564,12 +632,17 @@ def serve(open_window=True, port=None):
     try:
         server = make_server(port)
     except OSError:
-        if running(url):  # already open, e.g. started at login for "Hey Mira"
+        other = running(url)
+        if other and other.get("version") == VERSION:  # already open, e.g. started with Windows
             if open_window:
                 launch(url)
             return 0
-        print(f"Port {port} e onno program cholche. .env e WEB_PORT=8770 likhe abar chalao.")
-        return 1
+        if not (other and stop_old(port)):
+            print(f"Port {port} e onno program cholche. .env e WEB_PORT=8770 likhe abar chalao.")
+            return 1
+        print("Purono Mira bondho kore notun ta chalu korchi.")
+        time.sleep(0.5)
+        server = make_server(port)
     app = server.app
     app.install()
     app.start_wake()

@@ -33,6 +33,10 @@ git pull
 .\setup.bat
 ```
 
+Tarpor Desktop er Mira icon e chap dao. Windows er shathe chalu howa purono Mira cholte thakle notun
+Mira nije oita bondho kore notun ta chalu kore. `⋮` > **মিরার ভয়েস পরীক্ষা** e ekhon kon version cholche
+ta lekha thake.
+
 Offline backup ar private mode er jonno (optional, 8 GB RAM e `gemma3:1b` bhalo):
 
 ```powershell
@@ -167,7 +171,8 @@ Token `data\google_token.json` e thake. Bondho korte file ta muche dao, ar
 Mira r voice ekhon Mira r window nijei bajay (Edge/Chrome er sound), tai Windows e browser e sound
 bajle Mira o bajbe. Window lukano thakle ba browser na dile Python bajay.
 
-1. `⋮` > **মিরার ভয়েস পরীক্ষা** chapo. Kono somossa thakle niche holud lekhay karon dekhabe.
+1. `⋮` > **মিরার ভয়েস পরীক্ষা** chapo. Chat e dhap dhore lekha ashbe: voice toiri holo kina, window theke
+   baje kina, na baje Python theke baje kina. Kothay "হয়নি" lekha, sheta dekhe bojha jay somossa kothay.
 2. "জানালায় একবার ক্লিক করো" lekha ashle window e jekono jaygay ekbar click koro.
 3. Upore speaker button e kata dag thakle voice bondho, chap dao.
 4. Private mode e Mira voice e bole na (tala button).

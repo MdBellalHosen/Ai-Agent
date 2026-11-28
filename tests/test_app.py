@@ -205,7 +205,7 @@ class SecurityTests(Base):
         self.assertIn(self.app.token, page)
         self.assertNotIn("__NONCE__", page)
         self.assertIn("script-src 'nonce-", res.getheader("Content-Security-Policy"))
-        self.assertEqual(self.request("GET", "/api/ping", token=False), (200, {"app": "mira"}))
+        self.assertEqual(self.request("GET", "/api/ping", token=False), (200, {"app": "mira", "version": web.VERSION}))
 
     def test_bad_input(self):
         self.assertEqual(self.request("POST", "/api/send", b"[1]")[0], 400)
