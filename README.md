@@ -94,6 +94,18 @@ Voice diye eta approve kora jay na.
 | "ctrl s চাপো", "এটা টাইপ করো: ...", "উইন্ডো মিনিমাইজ করো", "নতুন ট্যাব খোলো" | Keyboard, typing, window, tab |
 | "গান থামাও", "পরের গান", "ব্রাইটনেস ৬০ করো", "Downloads ফোল্ডার খোলো" | Media, brightness, folder |
 | "Chrome বন্ধ করো", "ব্যাটারি কত?", "পিসি স্লিপে দাও" | App bondho (onumoti niye), battery/RAM/disk, sleep |
+| "স্ক্রিনে কী আছে?", "Search বক্সে ক্লিক করো", "প্রথম ভিডিওটা চালাও" | Screen dekhe bola, describe kore click |
+| "YouTube এ আরিজিতের গান চালাও" | Onek dhaper kaj: khola, dekha, click, type, abar dekha |
+| "কোন কোন উইন্ডো খোলা?", "Chrome এ যাও" | Open window list ar shekhane jawa |
+| "Downloads এ cv.pdf টা Documents\\Job এ সরাও", "নতুন ফোল্ডার বানাও", "এটা মুছে দাও" | File/folder banano, nam bodlano, sorano, copy, Recycle Bin e fela (onumoti niye) |
+| "Downloads এর cv.pdf খোলো", "Downloads এ কী আছে?" | File khola ar folder dekha |
+| "Wi-Fi সেটিংস খোলো", "Night light", "Bluetooth" | Windows Settings er page |
+
+Tumi Mira r window e kotha bolleo key chapa ar type kora jay tumi shesh je app e chile shekhane.
+
+Click ar file er nirapotta: delete, send, pay, buy, install er moto kichute click er age Mira onumoti chay.
+File er kaj shudhu Desktop, Documents, Downloads, Pictures, Music, Videos er moddhe, ar muche fele na,
+Recycle Bin e pathay. Program ba script (.exe, .bat, .ps1...) Mira khole na.
 
 Command Prompt, PowerShell, Registry, uninstall er moto app Mira khole na. Command window samne thakle
 Mira tate type ba key chape na, ar Win+R ba Win+X chape na, jate keu bhul kore kono command chalate na pare.
@@ -113,6 +125,7 @@ Nije Enter chapte chaile `.env` e `WHATSAPP_AUTOSEND=off`.
 | Setting | Ki kore |
 | --- | --- |
 | `AGENT_NAME`, `USER_NAME` | Mira r nam, tomake ki bole dakbe |
+| `VISION_MODEL` | Screen dekhe click er model (default `GEMINI_MODEL`). Click bhul jaygay porle aro boro Gemini model dao |
 | `VOICE_MODE=direct` | Gemini tomar voice shune ager kotha mile ekbar e bujhe uttor dey (taratari). `separate` dile age lekha, tarpor uttor |
 | `SILENCE_SECONDS=0.9` | Koto second chup thakle kotha shesh dhorbe. Kotha majhe kete gele 1.2 koro, aro fast chaile 0.7 |
 | `STT=gemini` | `separate` mode e kotha Gemini lekhe. `groq` dile Whisper age |
@@ -226,7 +239,8 @@ Purono terminal chat o ache:
 | `agent/google.py` | Gmail ar Calendar, shudhu pora |
 | `agent/study.py` | Flashcard ar mood diary |
 | `agent/daily.py` | Aajker briefing |
-| `agent/control.py` | Keyboard, typing, window, media, app bondho, brightness, WhatsApp |
+| `agent/control.py` | Keyboard, typing, window, media, app bondho, brightness, file, Settings, WhatsApp |
+| `agent/screen.py` | Screen dekha, describe kore click, window list ar switch, ager app e focus |
 | `agent/voice.py` | Female voice, mic, Bangla speech-to-text |
 | `agent/vision.py` | Chobi ar screen |
 | `agent/memory.py` | Memory ar note |

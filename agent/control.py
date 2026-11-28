@@ -57,6 +57,8 @@ def press_keys(keys):
         return f"Unknown key in '{keys}'"
     if any(combo <= set(parts) for combo in BLOCKED_COMBOS):
         return "That shortcut opens a command box, so it is not allowed"
+    from .screen import focus_target
+    focus_target()
     if unsafe_window():
         return "A command window is in front, so keys are not pressed for safety"
     import pyautogui
@@ -65,7 +67,9 @@ def press_keys(keys):
 
 
 def type_text(text, press_enter=False):
-    """Type into the window in front (works for Bangla too, through the clipboard)."""
+    """Type into the app the user was using (works for Bangla too, through the clipboard)."""
+    from .screen import focus_target
+    focus_target()
     title = unsafe_window()
     if title:
         return f"'{title}' is a command window, so Mira does not type there"
@@ -88,7 +92,8 @@ def window(action):
             "zoom_in": ("ctrl", "+"), "zoom_out": ("ctrl", "-"), "refresh": ("f5",), "fullscreen": ("f11",)}
     if action not in keys:
         return f"action must be one of {', '.join(keys)}"
-    title = window_title()
+    from .screen import focus_target
+    title = focus_target() if action not in ("show_desktop", "task_view", "switch") else window_title()
     import pyautogui
     pyautogui.hotkey(*keys[action])
     return f"{action.replace('_', ' ')} done" + (f" ({title})" if title and action == "close" else "")
@@ -203,6 +208,139 @@ def sleep_pc():
         return "User did not allow it"
     subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
     return "Going to sleep"
+
+
+# ---------- files ----------
+SETTINGS = {"wifi": "network-wifi", "bluetooth": "bluetooth", "display": "display", "sound": "sound",
+            "battery": "batterysaver", "notifications": "notifications", "focus": "quiethours",
+            "night_light": "nightlight", "wallpaper": "personalization-background", "theme": "themes",
+            "apps": "appsfeatures", "startup_apps": "startupapps", "updates": "windowsupdate",
+            "storage": "storagesense", "mouse": "mousetouchpad", "keyboard": "keyboard",
+            "language": "regionlanguage", "date_time": "dateandtime", "privacy": "privacy",
+            "camera": "privacy-webcam", "microphone": "privacy-microphone", "vpn": "network-vpn",
+            "hotspot": "network-mobilehotspot", "airplane_mode": "network-airplanemode",
+            "printers": "printers", "about": "about"}
+RUNS_CODE = {".exe", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".msi", ".msix",
+             ".scr", ".com", ".lnk", ".reg", ".hta", ".jar", ".py", ".pyw", ".appx", ".url"}
+
+
+def open_settings(page):
+    """Open a Windows Settings page, e.g. wifi, bluetooth, display, night_light, wallpaper."""
+    key = str(page).strip().lower().replace(" ", "_").replace("-", "_")
+    if key not in SETTINGS:
+        return f"page must be one of: {', '.join(SETTINGS)}"
+    os.startfile("ms-settings:" + SETTINGS[key])
+    return f"Opened {key.replace('_', ' ')} settings"
+
+
+def user_roots():
+    from .tools import search_folders
+    home = Path.home()
+    roots = list(search_folders()) + [home / n for n in ("Pictures", "Music", "Videos")]
+    return [r for r in roots if r.is_dir()]
+
+
+def inside_user_folders(path):
+    path = Path(path).resolve()
+    return any(path == r.resolve() or path.is_relative_to(r.resolve()) for r in user_roots())
+
+
+def resolve(name, must_exist=True):
+    """A file or folder in Desktop, Documents, Downloads, Pictures, Music or Videos."""
+    text = str(name).strip().strip('"')
+    if not text:
+        return None, "Give a file or folder name"
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        first, *rest = [part for part in re.split(r"[\\/]+", text) if part]
+        root = next((r for r in user_roots() if r.name.lower() == first.lower()), None)
+        if root:
+            path = root.joinpath(*rest)
+        elif must_exist:
+            from .tools import find_file
+            hits = [h for h in find_file(text).splitlines() if os.path.exists(h)]
+            if len(hits) != 1:
+                return None, (f"Found {len(hits)} matches for '{name}'" + (":\n" + "\n".join(hits[:8]) if hits else "")
+                              + ". Give the folder too, e.g. Downloads\\file.pdf")
+            path = Path(hits[0])
+        else:
+            return None, "Give where it goes, e.g. Documents\\Notes"
+    if not inside_user_folders(path):
+        return None, "Mira only works with files in Desktop, Documents, Downloads, Pictures, Music and Videos"
+    if must_exist and not path.exists():
+        return None, f"'{path}' does not exist"
+    return path, ""
+
+
+def to_recycle_bin(path):
+    class Op(ctypes.Structure):
+        _fields_ = [("hwnd", ctypes.c_void_p), ("wFunc", ctypes.c_uint), ("pFrom", ctypes.c_wchar_p),
+                    ("pTo", ctypes.c_wchar_p), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", ctypes.c_bool),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", ctypes.c_wchar_p)]
+    op = Op(None, 3, str(path) + "\0", None, 0x0040 | 0x0010 | 0x0004 | 0x0400, False, None, None)
+    if ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) or op.fAnyOperationsAborted:
+        raise OSError("Recycle Bin move failed")
+
+
+def file_action(action, path, target=""):
+    """create_folder, rename, move, copy, or delete (to the Recycle Bin, asks first), inside the user's folders."""
+    from .tools import confirm
+    if action == "create_folder":
+        folder, problem = resolve(path, must_exist=False)
+        if problem:
+            return problem
+        folder.mkdir(parents=True, exist_ok=True)
+        return f"Created folder {folder}"
+    source, problem = resolve(path)
+    if problem:
+        return problem
+    if action == "delete":
+        if not confirm(f"Move '{source.name}' to the Recycle Bin? You can restore it from there."):
+            return "User did not allow it"
+        to_recycle_bin(source)
+        return f"Moved {source.name} to the Recycle Bin"
+    if action == "rename":
+        new_name = Path(str(target)).name
+        if not new_name or new_name in (".", ".."):
+            return "Give the new name"
+        dest = source.with_name(new_name)
+    elif action in ("move", "copy"):
+        dest, problem = resolve(target, must_exist=False)
+        if problem:
+            return problem
+        if dest.is_dir() or not dest.suffix:
+            dest.mkdir(parents=True, exist_ok=True)
+            dest = dest / source.name
+    else:
+        return "action must be create_folder, rename, move, copy or delete"
+    if dest.exists():
+        return f"'{dest}' already exists, nothing was changed"
+    if action == "copy":
+        (shutil.copytree if source.is_dir() else shutil.copy2)(source, dest)
+    else:
+        shutil.move(str(source), str(dest))
+    return f"{ {'rename': 'Renamed', 'move': 'Moved', 'copy': 'Copied'}[action] } {source.name} to {dest}"
+
+
+def open_file(name):
+    """Open a document, photo, song or video with its normal app. Programs and scripts are not opened."""
+    path, problem = resolve(name)
+    if problem:
+        return problem
+    if path.is_file() and path.suffix.lower() in RUNS_CODE:
+        return "That file runs a program, so Mira does not open it. The user can open it by hand."
+    os.startfile(str(path))
+    return f"Opened {path}"
+
+
+def list_folder(name="Downloads"):
+    path, problem = resolve(name)
+    if problem:
+        return problem
+    if not path.is_dir():
+        return f"{path} is a file"
+    items = sorted(path.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:40]
+    return "\n".join(("[folder] " if i.is_dir() else "") + i.name for i in items) or "Empty folder"
 
 
 # ---------- WhatsApp ----------

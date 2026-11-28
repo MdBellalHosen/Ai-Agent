@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import apps, brain, config, files, tools, tray, voice, wake
+from . import apps, brain, config, files, screen, tools, tray, voice, wake
 from .vision import image_url
 
 PAGE = Path(__file__).with_name("static") / "index.html"
@@ -574,6 +574,7 @@ def serve(open_window=True, port=None):
     app.install()
     app.start_wake()
     apps.preload()
+    screen.track_focus()
     threading.Thread(target=lambda: (brain.warm_up(), voice.warm_up()), daemon=True).start()
     app.tray = tray.start(app, server, launch)
     print(f"{config.NAME} cholche: {url}")

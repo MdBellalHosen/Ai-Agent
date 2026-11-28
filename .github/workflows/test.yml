@@ -65,3 +65,10 @@ jobs:
             $s.SetOutputToWaveFile($pair[0], $fmt); $s.Speak($pair[1]); $s.Dispose()
           }
           .venv\Scripts\python -c "import json, wave, vosk; from agent import wake; pcm = lambda f: wave.open(f).readframes(10**7); print('offline:', wake.offline_transcribe(pcm('talk.wav'))); r = vosk.KaldiRecognizer(wake.model(), 16000, json.dumps(wake.GRAMMAR)); r.SetWords(True); r.AcceptWaveform(pcm('wake.wav')); res = json.loads(r.FinalResult()); print('wake:', res.get('text'), wake.is_wake(res))"
+      - name: Windows desktop tools (windows list, screenshot, Recycle Bin)
+        continue-on-error: true
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          .venv\Scripts\python -c "from agent import screen, control; print(screen.list_windows()); print('screen', screen.grab().size); print(control.system_status())"
+          .venv\Scripts\python -c "from pathlib import Path; from agent import control; f = Path.home() / 'Documents' / 'mira-test.txt'; f.parent.mkdir(exist_ok=True); f.write_text('x'); control.to_recycle_bin(f); print('recycle bin ok', not f.exists())"
