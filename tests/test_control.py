@@ -168,7 +168,7 @@ class AppVoiceTests(Base):
         report = self.updates()["messages"][-1]["text"]
         self.assertIn(web.VERSION, report)
         self.assertIn("ভয়েস তৈরি (Microsoft): ঠিক আছে", report)
-        self.assertIn("জানালা থেকে বাজানো: হয়নি (window did not answer)", report)
+        self.assertIn("জানালা থেকে বাজানো: হয়নি (window not listening)", report)
         self.assertIn("Python থেকে বাজানো: ঠিক আছে", report)
         self.assertEqual(played, [b"mp3"])
 

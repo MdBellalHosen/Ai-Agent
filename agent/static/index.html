@@ -247,9 +247,11 @@ const TOOLS = { open_app: "অ্যাপ খুলেছে", open_website: "�
   open_file: "ফাইল খোলা", list_folder: "ফোল্ডার দেখা" };
 let last = 0, view = null, picture = null, doc = null, shownNotice = 0, answeredAsk = 0, pendingAsk = 0, wasActive = false;
 
-/* ---------- Mira's voice, played here in the window ---------- */
+/* ---------- Mira's voice, played here in the window ----------
+   One request always waits at the server for the next voice piece. A waiting request is
+   answered at once, so the voice plays even when this window is behind others. */
 const Sound = (() => {
-  let current = null, context = null, analyser = null, samples = null, finished = 0;
+  let current = null, context = null, analyser = null, samples = null, stops = null;
 
   function unlock() {  // after any click the window may play sound and measure it
     try {
@@ -270,45 +272,60 @@ const Sound = (() => {
   }
 
   function level() {
-    if (!analyser || !current || !current.el || current.el.paused) return null;
+    if (!analyser || !current || current.paused) return null;
     analyser.getByteTimeDomainData(samples);
     let sum = 0;
     for (const v of samples) sum += (v - 128) * (v - 128);
     return Math.min(1, Math.sqrt(sum / samples.length) / 40);
   }
 
-  function finish(id, started, error) {
-    finished = Math.max(finished, id);  // a piece is never played twice
-    if (current && current.id === id) {
-      if (current.url) URL.revokeObjectURL(current.url);
-      current = null; analyser = null;
-    }
-    api("/api/audio/done", { id, started, error }).catch(() => {});
+  function playOne(blob, id) {  // resolves with {started, error} when the piece ends or fails
+    return new Promise(resolve => {
+      const url = URL.createObjectURL(blob), el = current = new Audio(url);
+      let started = false, settled = false;
+      const done = error => {
+        if (settled) return;
+        settled = true; URL.revokeObjectURL(url);
+        if (current === el) { current = null; analyser = null; }
+        resolve({ started, error });
+      };
+      measure(el);
+      // if the browser holds the sound back (it can, for windows in the background), give it to Mira after 4 s
+      setTimeout(() => { if (!started) { el.pause(); done("did not start"); } }, 4000);
+      el.onplaying = () => {
+        if (!started) api("/api/audio/started", { id }).catch(() => {});
+        started = true;
+      };
+      el.onended = () => done("");
+      el.onpause = () => { if (!el.ended && started) done(""); };  // stopped by Mira
+      el.onerror = () => done("could not play");
+      el.play().catch(e => done(e.name || String(e)));
+    });
   }
 
-  async function play(item) {
-    if (!item) { if (current && current.el) current.el.pause(); if (current) current = null; return; }
-    if (item.id <= finished || (current && current.id === item.id)) return;
-    if (current && current.el) current.el.pause();
-    const id = item.id;
-    current = { id };
-    let started = false;
-    try {
-      const res = await fetch("/api/audio?id=" + id, { headers: { "X-Token": TOKEN } });
-      if (!res.ok || !current || current.id !== id) return;
-      current.url = URL.createObjectURL(await res.blob());
-      const el = current.el = new Audio(current.url);
-      measure(el);
-      el.onplaying = () => { started = true; };
-      el.onended = () => finish(id, true, "");
-      el.onerror = () => finish(id, started, "could not play");
-      await el.play();
-      started = true;
-    } catch (e) {
-      finish(id, started, e.name || String(e));
+  async function loop() {
+    let after = 0;
+    for (;;) {
+      try {
+        const res = await fetch("/api/audio/next?after=" + after, { headers: { "X-Token": TOKEN } });
+        if (res.status === 403) { location.reload(); return; }
+        if (res.status !== 200) continue;  // nothing to say yet: ask again
+        const id = Number(res.headers.get("X-Audio-Id"));
+        after = Math.max(after, id);
+        const result = await playOne(await res.blob(), id);
+        api("/api/audio/done", { id, started: result.started, error: result.error }).catch(() => {});
+      } catch (e) {
+        await new Promise(r => setTimeout(r, 1000));  // Mira restarting: try again
+      }
     }
   }
-  return { play, level };
+
+  function stopCount(n) {  // Mira asked to stop (mic, stop button, mute)
+    if (stops !== null && n > stops && current) current.pause();
+    stops = n;
+  }
+  loop();
+  return { level, stopCount };
 })();
 
 /* ---------- the orb: soft colour blobs that breathe, listen, think and speak ---------- */
@@ -494,7 +511,7 @@ function render(s) {
   document.body.dataset.state = s.state;
   document.body.classList.toggle("private", s.private);
   Orb.set(s.state, s.private, s.level);
-  Sound.play(s.play);
+  Sound.stopCount(s.stops);
   $("wakeBtn").textContent = s.wake_on ? "\"Hey Mira\" বন্ধ করো" : "\"Hey Mira\" চালু করো";
   $("wakeBtn").style.display = s.wake === "off" ? "none" : "";
   $("name").textContent = s.name;
@@ -519,7 +536,7 @@ function render(s) {
 
 async function poll() {
   let again = false;
-  try { again = render(await api("/api/updates?after=" + last + "&v=" + (document.hidden ? 0 : 1))); }
+  try { again = render(await api("/api/updates?after=" + last)); }
   catch (e) { if (e.message !== "reload") { $("status").textContent = "মিরা বন্ধ আছে"; $("subStatus").textContent = "Desktop এর Mira আইকন থেকে আবার খোলো"; } }
   const state = document.body.dataset.state;
   setTimeout(poll, again ? 0 : state === "listening" || state === "speaking" ? 100 : state === "idle" ? 700 : 250);

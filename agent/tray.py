@@ -30,7 +30,7 @@ def start(app, server, launch):
     def toggle_mute(icon, item):
         voice.settings["muted"] = not voice.settings["muted"]
         if voice.settings["muted"]:
-            voice.stop_speaking()
+            app.hush()
 
     def quit_all(icon, item):
         icon.stop()

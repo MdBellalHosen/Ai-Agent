@@ -81,3 +81,9 @@ jobs:
           Start-Process -FilePath .venv\Scripts\python.exe -ArgumentList "main.py","--background" -WindowStyle Hidden
           Start-Sleep -Seconds 8
           .venv\Scripts\python -c "from agent import web; print('before', web.running('http://127.0.0.1:8765/')); print('stopped', web.stop_old(8765)); print('after', web.running('http://127.0.0.1:8765/'))"
+      - name: Windows player plays Mira's voice
+        continue-on-error: true
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          .venv\Scripts\python -c "import time; from agent import voice; a = voice.tts_bytes('আমি মিরা।'); t = time.monotonic(); voice.play_windows(a); print('windows player ok', round(time.monotonic() - t, 1), 's')"
